@@ -10,10 +10,17 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "fastapi (>=0.116.1,<0.117.0)",
     "uvicorn (>=0.35.0,<0.36.0)",
-    "psutil (>=7.0.0,<8.0.0)"
+    "psutil (>=7.0.0,<8.0.0)",
+    "sqlalchemy (>=2.0.43,<3.0.0)",
+    "alembic (>=1.16.5,<2.0.0)"
 ]
+
+[project.scripts]
+makemigrations = "server.cli.commands:make_migration"
+migrate = "server.cli.commands:migrate"
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+

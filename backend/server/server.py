@@ -4,7 +4,7 @@ from server.routers.general import router
 
 def create_app() -> FastAPI:
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(router, prefix="/api")
     
     # CORS settings
     app.add_middleware(
