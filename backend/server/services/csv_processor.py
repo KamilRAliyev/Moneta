@@ -53,6 +53,11 @@ class CSVProcessor:
                     "transactions_created": 0
                 }
             
+            # Extract column information from the first transaction
+            if transactions_data:
+                columns_info = self._extract_columns_info(transactions_data[0])
+                statement.columns = columns_info
+            
             # Process and save transactions
             created_count = self._save_transactions(statement, transactions_data, db)
             
@@ -155,6 +160,57 @@ class CSVProcessor:
         
         return cleaned_row
     
+    def _extract_columns_info(self, sample_transaction: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract normalized column information from a sample transaction.
+        
+        Args:
+            sample_transaction: Sample transaction data to extract column info from
+            
+        Returns:
+            Dictionary with normalized column information
+        """
+        columns_info = {
+            "original_columns": list(sample_transaction.keys()),
+            "normalized_columns": {},
+            "column_count": len(sample_transaction.keys()),
+            "detected_fields": {}
+        }
+        
+        # Common field mappings for normalization
+        field_mappings = {
+            # Date fields
+            'date': ['date', 'transaction_date', 'posting_date', 'value_date', 'effective_date'],
+            'description': ['description', 'memo', 'payee', 'merchant', 'transaction_details', 'narrative'],
+            'amount': ['amount', 'transaction_amount', 'debit', 'credit', 'value'],
+            'balance': ['balance', 'running_balance', 'account_balance', 'available_balance'],
+            'reference': ['reference', 'ref', 'transaction_id', 'check_number', 'trace_number'],
+            'type': ['type', 'transaction_type', 'debit_credit', 'dr_cr'],
+            'category': ['category', 'classification', 'subcategory'],
+            'account': ['account', 'account_number', 'account_name'],
+            'currency': ['currency', 'ccy', 'currency_code']
+        }
+        
+        # Detect and map fields
+        for original_col in sample_transaction.keys():
+            original_lower = original_col.lower().strip()
+            normalized_field = None
+            
+            # Find matching normalized field
+            for norm_field, possible_names in field_mappings.items():
+                if any(name in original_lower for name in possible_names):
+                    normalized_field = norm_field
+                    break
+            
+            if normalized_field:
+                columns_info["normalized_columns"][original_col] = normalized_field
+                columns_info["detected_fields"][normalized_field] = original_col
+            else:
+                # Keep as custom field
+                columns_info["normalized_columns"][original_col] = f"custom_{original_lower.replace(' ', '_')}"
+        
+        return columns_info
+
     def _save_transactions(self, statement: Statement, transactions_data: List[Dict[str, Any]], db: Session) -> int:
         """Save transactions to database."""
         created_count = 0

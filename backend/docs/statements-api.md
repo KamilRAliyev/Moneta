@@ -85,6 +85,7 @@ List all statements with pagination.
       "file_hash": "sha256-hash",
       "mime_type": "text/csv",
       "processed": false,
+      "columns": null,
       "created_at": "2023-01-01T00:00:00"
     }
   ],
@@ -109,6 +110,7 @@ Get a specific statement by ID.
   "file_hash": "sha256-hash",
   "mime_type": "text/csv",
   "processed": false,
+  "columns": null,
   "created_at": "2023-01-01T00:00:00"
 }
 ```

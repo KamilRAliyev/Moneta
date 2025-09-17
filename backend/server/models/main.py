@@ -23,6 +23,7 @@ class Statement(Base):
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     processed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    columns: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="statement", cascade="all, delete-orphan")

@@ -364,6 +364,7 @@ async def list_statements(
                     "file_hash": stmt.file_hash,
                     "mime_type": stmt.mime_type,
                     "processed": stmt.processed,
+                    "columns": stmt.columns,
                     "created_at": stmt.created_at.isoformat()
                 }
                 for stmt in statements
@@ -403,6 +404,7 @@ async def get_statement(
             "file_hash": statement.file_hash,
             "mime_type": statement.mime_type,
             "processed": statement.processed,
+            "columns": statement.columns,
             "created_at": statement.created_at.isoformat()
         }
     except HTTPException:

@@ -46,11 +46,15 @@ async def list_transactions(
                     "ingested_content_hash": t.ingested_content_hash,
                     "ingested_at": t.ingested_at.isoformat(),
                     "created_at": t.created_at.isoformat(),
+                    "computed_content": t.computed_content,
+                    "computed_content_hash": t.computed_content_hash,
+                    "computed_at": t.computed_at.isoformat() if t.computed_at else None,
                     "statement": {
                         "id": t.statement.id,
                         "filename": t.statement.filename,
                         "mime_type": t.statement.mime_type,
                         "processed": t.statement.processed,
+                        "columns": t.statement.columns,
                         "created_at": t.statement.created_at.isoformat()
                     }
                 }
@@ -98,9 +102,9 @@ async def get_transaction(
             "ingested_content_hash": transaction.ingested_content_hash,
             "ingested_content": transaction.ingested_content,
             "ingested_at": transaction.ingested_at.isoformat(),
-            "computed_content_hash": transaction.computed_content_hash,
             "computed_content": transaction.computed_content,
-            "computed_at": transaction.computed_at.isoformat()
+            "computed_content_hash": transaction.computed_content_hash,
+            "computed_at": transaction.computed_at.isoformat() if transaction.computed_at else None
         }
     except HTTPException:
         raise
@@ -185,7 +189,7 @@ async def get_transactions_by_statement(
                     "created_at": t.created_at.isoformat(),
                     "computed_content": t.computed_content,
                     "computed_content_hash": t.computed_content_hash,
-                    "computed_at": t.computed_at.isoformat()
+                    "computed_at": t.computed_at.isoformat() if t.computed_at else None
                 }
                 for t in transactions
             ],
@@ -236,19 +240,18 @@ async def search_transactions_by_content(
                     "statement": {
                         "id": t.statement.id,
                         "filename": t.statement.filename,
-                        "file_path": t.statement.file_path,
-                        "file_hash": t.statement.file_hash,
                         "mime_type": t.statement.mime_type,
                         "processed": t.statement.processed,
+                        "columns": t.statement.columns,
                         "created_at": t.statement.created_at.isoformat()
-                    }
+                    },
                     "ingested_content": t.ingested_content,
                     "ingested_content_hash": t.ingested_content_hash,
                     "ingested_at": t.ingested_at.isoformat(),
                     "created_at": t.created_at.isoformat(),
                     "computed_content": t.computed_content,
                     "computed_content_hash": t.computed_content_hash,
-                    "computed_at": t.computed_at.isoformat()
+                    "computed_at": t.computed_at.isoformat() if t.computed_at else None
                 }
                 for t in transactions
             ],

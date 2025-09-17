@@ -27,6 +27,9 @@ List transactions with pagination and optional filtering.
       "ingested_content_hash": "sha256-hash",
       "ingested_at": "2023-01-01T00:00:00",
       "created_at": "2023-01-01T00:00:00",
+      "computed_content": null,
+      "computed_content_hash": null,
+      "computed_at": null,
       "statement": {
         "id": "uuid-string",
         "filename": "statement.csv",
@@ -34,6 +37,20 @@ List transactions with pagination and optional filtering.
         "file_hash": "sha256-hash",
         "mime_type": "text/csv",
         "processed": true,
+        "columns": {
+          "original_columns": ["date", "description", "amount"],
+          "normalized_columns": {
+            "date": "date",
+            "description": "description",
+            "amount": "amount"
+          },
+          "column_count": 3,
+          "detected_fields": {
+            "date": "date",
+            "description": "description",
+            "amount": "amount"
+          }
+        },
         "created_at": "2023-01-01T00:00:00"
       }
     }
@@ -63,6 +80,9 @@ Get a specific transaction by ID.
   "ingested_content_hash": "sha256-hash",
   "ingested_at": "2023-01-01T00:00:00",
   "created_at": "2023-01-01T00:00:00",
+  "computed_content": null,
+  "computed_content_hash": null,
+  "computed_at": null,
   "statement": {
     "id": "uuid-string",
     "filename": "statement.csv",
@@ -70,6 +90,20 @@ Get a specific transaction by ID.
     "file_hash": "sha256-hash",
     "mime_type": "text/csv",
     "processed": true,
+    "columns": {
+      "original_columns": ["date", "description", "amount"],
+      "normalized_columns": {
+        "date": "date",
+        "description": "description",
+        "amount": "amount"
+      },
+      "column_count": 3,
+      "detected_fields": {
+        "date": "date",
+        "description": "description",
+        "amount": "amount"
+      }
+    },
     "created_at": "2023-01-01T00:00:00"
   }
 }
@@ -107,6 +141,20 @@ Get all transactions for a specific statement.
     "file_hash": "sha256-hash",
     "mime_type": "text/csv",
     "processed": true,
+    "columns": {
+      "original_columns": ["date", "description", "amount"],
+      "normalized_columns": {
+        "date": "date",
+        "description": "description",
+        "amount": "amount"
+      },
+      "column_count": 3,
+      "detected_fields": {
+        "date": "date",
+        "description": "description",
+        "amount": "amount"
+      }
+    },
     "created_at": "2023-01-01T00:00:00"
   },
   "transactions": [
@@ -119,7 +167,10 @@ Get all transactions for a specific statement.
       },
       "ingested_content_hash": "sha256-hash",
       "ingested_at": "2023-01-01T00:00:00",
-      "created_at": "2023-01-01T00:00:00"
+      "created_at": "2023-01-01T00:00:00",
+      "computed_content": null,
+      "computed_content_hash": null,
+      "computed_at": null
     }
   ],
   "total": 1,
@@ -152,6 +203,9 @@ Search transactions by content using JSON field search.
       "ingested_content_hash": "sha256-hash",
       "ingested_at": "2023-01-01T00:00:00",
       "created_at": "2023-01-01T00:00:00",
+      "computed_content": null,
+      "computed_content_hash": null,
+      "computed_at": null,
       "statement": {
         "id": "uuid-string",
         "filename": "statement.csv",
@@ -159,6 +213,20 @@ Search transactions by content using JSON field search.
         "file_hash": "sha256-hash",
         "mime_type": "text/csv",
         "processed": true,
+        "columns": {
+          "original_columns": ["date", "description", "amount"],
+          "normalized_columns": {
+            "date": "date",
+            "description": "description",
+            "amount": "amount"
+          },
+          "column_count": 3,
+          "detected_fields": {
+            "date": "date",
+            "description": "description",
+            "amount": "amount"
+          }
+        },
         "created_at": "2023-01-01T00:00:00"
       }
     }
@@ -322,9 +390,48 @@ Each transaction response includes complete statement information in the `statem
 - **file_hash**: SHA-256 hash of the original file
 - **mime_type**: MIME type of the uploaded file
 - **processed**: Whether the statement has been processed for transactions
+- **columns**: Normalized column information (null if not processed)
 - **created_at**: Timestamp when the statement was uploaded
 
 This eliminates the need for separate API calls to get statement details and provides complete context for each transaction.
+
+## Computed Content Fields
+
+Each transaction includes computed content fields for future data processing:
+
+- **computed_content**: Processed/computed transaction data (null if not computed)
+- **computed_content_hash**: Hash of the computed content for integrity
+- **computed_at**: Timestamp when the content was computed (null if not computed)
+
+These fields are ready for future data processing workflows and computed content generation.
+
+## Column Information Structure
+
+When a statement is processed, the `columns` field contains normalized column information:
+
+```json
+{
+  "original_columns": ["Transaction Date", "Description", "Amount"],
+  "normalized_columns": {
+    "Transaction Date": "date",
+    "Description": "description", 
+    "Amount": "amount"
+  },
+  "column_count": 3,
+  "detected_fields": {
+    "date": "Transaction Date",
+    "description": "Description",
+    "amount": "Amount"
+  }
+}
+```
+
+- **original_columns**: List of original column names from the file
+- **normalized_columns**: Mapping from original to normalized field names
+- **column_count**: Total number of columns detected
+- **detected_fields**: Reverse mapping from normalized to original field names
+
+This enables consistent data processing across different file formats and column naming conventions.
 
 ## Features
 
