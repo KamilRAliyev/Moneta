@@ -187,7 +187,8 @@ def test_get_transactions_by_statement(client):
         assert response.status_code == 200
         data = response.json()
         assert data["statement_id"] == statement_id
-        assert "statement_filename" in data
+        assert "statement" in data
+        assert data["statement"]["filename"] == "test_statement.csv"
         assert "transactions" in data
         assert len(data["transactions"]) > 0
         

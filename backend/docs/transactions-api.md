@@ -26,7 +26,16 @@ List transactions with pagination and optional filtering.
       },
       "ingested_content_hash": "sha256-hash",
       "ingested_at": "2023-01-01T00:00:00",
-      "created_at": "2023-01-01T00:00:00"
+      "created_at": "2023-01-01T00:00:00",
+      "statement": {
+        "id": "uuid-string",
+        "filename": "statement.csv",
+        "file_path": "/path/to/statement.csv",
+        "file_hash": "sha256-hash",
+        "mime_type": "text/csv",
+        "processed": true,
+        "created_at": "2023-01-01T00:00:00"
+      }
     }
   ],
   "total": 1,
@@ -53,7 +62,16 @@ Get a specific transaction by ID.
   },
   "ingested_content_hash": "sha256-hash",
   "ingested_at": "2023-01-01T00:00:00",
-  "created_at": "2023-01-01T00:00:00"
+  "created_at": "2023-01-01T00:00:00",
+  "statement": {
+    "id": "uuid-string",
+    "filename": "statement.csv",
+    "file_path": "/path/to/statement.csv",
+    "file_hash": "sha256-hash",
+    "mime_type": "text/csv",
+    "processed": true,
+    "created_at": "2023-01-01T00:00:00"
+  }
 }
 ```
 
@@ -82,7 +100,15 @@ Get all transactions for a specific statement.
 ```json
 {
   "statement_id": "uuid-string",
-  "statement_filename": "statement.csv",
+  "statement": {
+    "id": "uuid-string",
+    "filename": "statement.csv",
+    "file_path": "/path/to/statement.csv",
+    "file_hash": "sha256-hash",
+    "mime_type": "text/csv",
+    "processed": true,
+    "created_at": "2023-01-01T00:00:00"
+  },
   "transactions": [
     {
       "id": "uuid-string",
@@ -125,7 +151,16 @@ Search transactions by content using JSON field search.
       },
       "ingested_content_hash": "sha256-hash",
       "ingested_at": "2023-01-01T00:00:00",
-      "created_at": "2023-01-01T00:00:00"
+      "created_at": "2023-01-01T00:00:00",
+      "statement": {
+        "id": "uuid-string",
+        "filename": "statement.csv",
+        "file_path": "/path/to/statement.csv",
+        "file_hash": "sha256-hash",
+        "mime_type": "text/csv",
+        "processed": true,
+        "created_at": "2023-01-01T00:00:00"
+      }
     }
   ],
   "total": 1,
@@ -277,12 +312,27 @@ Transactions are stored as JSON objects in the `ingested_content` field. The str
 - **Reference**: Transaction reference number
 - **Type**: Transaction type (debit/credit)
 
+## Statement Information
+
+Each transaction response includes complete statement information in the `statement` field:
+
+- **id**: Statement unique identifier
+- **filename**: Original filename of the uploaded statement
+- **file_path**: Full path to the stored statement file
+- **file_hash**: SHA-256 hash of the original file
+- **mime_type**: MIME type of the uploaded file
+- **processed**: Whether the statement has been processed for transactions
+- **created_at**: Timestamp when the statement was uploaded
+
+This eliminates the need for separate API calls to get statement details and provides complete context for each transaction.
+
 ## Features
 
 - **Flexible Storage**: Transactions stored as JSON for maximum flexibility
 - **Content Search**: Full-text search across transaction content
 - **Pagination**: Efficient pagination for large datasets
 - **Statement Linking**: Transactions linked to their source statements
+- **Statement Information**: Each transaction includes complete statement details
 - **Duplicate Prevention**: Hash-based duplicate detection
 - **Batch Processing**: Process multiple transactions from single statement
 - **Content Preview**: Quick preview of transaction content without full details

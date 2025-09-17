@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import String
 from typing import List, Optional
 from datetime import datetime
@@ -29,7 +29,7 @@ async def list_transactions(
         List of transactions with pagination info
     """
     try:
-        query = db.query(Transaction)
+        query = db.query(Transaction).options(joinedload(Transaction.statement))
         
         if statement_id:
             query = query.filter(Transaction.statement_id == statement_id)
@@ -45,7 +45,14 @@ async def list_transactions(
                     "ingested_content": t.ingested_content,
                     "ingested_content_hash": t.ingested_content_hash,
                     "ingested_at": t.ingested_at.isoformat(),
-                    "created_at": t.created_at.isoformat()
+                    "created_at": t.created_at.isoformat(),
+                    "statement": {
+                        "id": t.statement.id,
+                        "filename": t.statement.filename,
+                        "mime_type": t.statement.mime_type,
+                        "processed": t.statement.processed,
+                        "created_at": t.statement.created_at.isoformat()
+                    }
                 }
                 for t in transactions
             ],
@@ -72,7 +79,7 @@ async def get_transaction(
         Transaction details
     """
     try:
-        transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        transaction = db.query(Transaction).options(joinedload(Transaction.statement)).filter(Transaction.id == transaction_id).first()
         
         if not transaction:
             raise HTTPException(status_code=404, detail="Transaction not found")
@@ -80,10 +87,20 @@ async def get_transaction(
         return {
             "id": transaction.id,
             "statement_id": transaction.statement_id,
-            "ingested_content": transaction.ingested_content,
+            "created_at": transaction.created_at.isoformat(),
+            "statement": {
+                "id": transaction.statement.id,
+                "filename": transaction.statement.filename,
+                "mime_type": transaction.statement.mime_type,
+                "processed": transaction.statement.processed,
+                "created_at": transaction.statement.created_at.isoformat()
+            },
             "ingested_content_hash": transaction.ingested_content_hash,
+            "ingested_content": transaction.ingested_content,
             "ingested_at": transaction.ingested_at.isoformat(),
-            "created_at": transaction.created_at.isoformat()
+            "computed_content_hash": transaction.computed_content_hash,
+            "computed_content": transaction.computed_content,
+            "computed_at": transaction.computed_at.isoformat()
         }
     except HTTPException:
         raise
@@ -152,14 +169,23 @@ async def get_transactions_by_statement(
         
         return {
             "statement_id": statement_id,
-            "statement_filename": statement.filename,
+            "statement": {
+                "id": statement.id,
+                "filename": statement.filename,
+                "mime_type": statement.mime_type,
+                "processed": statement.processed,
+                "created_at": statement.created_at.isoformat()
+            },
             "transactions": [
                 {
                     "id": t.id,
                     "ingested_content": t.ingested_content,
                     "ingested_content_hash": t.ingested_content_hash,
                     "ingested_at": t.ingested_at.isoformat(),
-                    "created_at": t.created_at.isoformat()
+                    "created_at": t.created_at.isoformat(),
+                    "computed_content": t.computed_content,
+                    "computed_content_hash": t.computed_content_hash,
+                    "computed_at": t.computed_at.isoformat()
                 }
                 for t in transactions
             ],
@@ -194,7 +220,7 @@ async def search_transactions_by_content(
     try:
         # Simple text search in the JSON content
         # This is a basic implementation - for production, consider using full-text search
-        query = db.query(Transaction).filter(
+        query = db.query(Transaction).options(joinedload(Transaction.statement)).filter(
             Transaction.ingested_content.cast(String).contains(q)
         )
         
@@ -207,10 +233,22 @@ async def search_transactions_by_content(
                 {
                     "id": t.id,
                     "statement_id": t.statement_id,
+                    "statement": {
+                        "id": t.statement.id,
+                        "filename": t.statement.filename,
+                        "file_path": t.statement.file_path,
+                        "file_hash": t.statement.file_hash,
+                        "mime_type": t.statement.mime_type,
+                        "processed": t.statement.processed,
+                        "created_at": t.statement.created_at.isoformat()
+                    }
                     "ingested_content": t.ingested_content,
                     "ingested_content_hash": t.ingested_content_hash,
                     "ingested_at": t.ingested_at.isoformat(),
-                    "created_at": t.created_at.isoformat()
+                    "created_at": t.created_at.isoformat(),
+                    "computed_content": t.computed_content,
+                    "computed_content_hash": t.computed_content_hash,
+                    "computed_at": t.computed_at.isoformat()
                 }
                 for t in transactions
             ],
