@@ -1,10 +1,17 @@
 import os
 
 DEBUG = True
+TESTING = os.getenv('TESTING', 'false').lower() == 'true'
 
 ALLOWED_FILE_EXTENSIONS = [".csv", ".xlsx", ".xls"]
 
-if DEBUG:
+if TESTING:
+    # Use separate test databases
+    DATABASE_PATHS = {
+        'main': os.path.join(os.path.dirname(__file__), '..', 'data', 'test_transactions.db'),
+        'configurations': os.path.join(os.path.dirname(__file__), '..', 'data', 'test_configurations.db'),
+    }
+elif DEBUG:
     DATABASE_PATHS = {
         'main': os.path.join(os.path.dirname(__file__), '..', 'data', 'transactions_dev.db'),
         'configurations': os.path.join(os.path.dirname(__file__), '..', 'data', 'configurations_dev.db'),

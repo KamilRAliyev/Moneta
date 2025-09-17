@@ -12,12 +12,26 @@ dependencies = [
     "uvicorn (>=0.35.0,<0.36.0)",
     "psutil (>=7.0.0,<8.0.0)",
     "sqlalchemy (>=2.0.43,<3.0.0)",
-    "alembic (>=1.16.5,<2.0.0)"
+    "alembic (>=1.16.5,<2.0.0)",
+    "python-multipart (>=0.0.6,<1.0.0)"
 ]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+httpx = "^0.24.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
 
 [project.scripts]
 makemigrations = "server.cli.commands:make_migration"
 migrate = "server.cli.commands:migrate"
+server = "server.server:main"
 
 
 [build-system]
