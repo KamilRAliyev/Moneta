@@ -11,6 +11,7 @@ from datetime import datetime
 from server.models.main import Statement
 from server.services.database import get_db
 from server.services.file_management import FileStorageService
+from server.services.csv_processor import CSVProcessor
 from server.settings import ALLOWED_FILE_EXTENSIONS
 
 router = APIRouter(prefix="/statements", tags=["statements"])
@@ -244,6 +245,96 @@ async def upload_multiple_statements(
             "results": results
         }
     )
+
+@router.post("/{statement_id}/process")
+async def process_statement(
+    statement_id: str,
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Process a statement file and extract transactions.
+    
+    Args:
+        statement_id: The statement ID to process
+        db: Database session
+    
+    Returns:
+        JSON response with processing results
+    """
+    try:
+        # Get the statement
+        statement = db.query(Statement).filter(Statement.id == statement_id).first()
+        
+        if not statement:
+            raise HTTPException(status_code=404, detail="Statement not found")
+        
+        # Check if file exists
+        file_path = Path(statement.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Statement file not found")
+        
+        # Process the statement
+        processor = CSVProcessor()
+        result = processor.process_statement(statement, db)
+        
+        if result["success"]:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "message": result["message"],
+                    "statement_id": statement_id,
+                    "transactions_processed": result["transactions_processed"],
+                    "transactions_created": result["transactions_created"],
+                    "processed": statement.processed
+                }
+            )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "message": result["message"],
+                    "statement_id": statement_id,
+                    "transactions_processed": result["transactions_processed"],
+                    "transactions_created": result["transactions_created"]
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/{statement_id}/transactions")
+async def get_statement_transactions(
+    statement_id: str,
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Get transactions for a specific statement.
+    
+    Args:
+        statement_id: The statement ID
+        db: Database session
+    
+    Returns:
+        List of transactions for the statement
+    """
+    try:
+        # Check if statement exists
+        statement = db.query(Statement).filter(Statement.id == statement_id).first()
+        if not statement:
+            raise HTTPException(status_code=404, detail="Statement not found")
+        
+        # Get transaction summary
+        processor = CSVProcessor()
+        result = processor.get_transaction_summary(statement_id, db)
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/")
 async def list_statements(

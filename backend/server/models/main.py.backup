@@ -33,6 +33,42 @@ class Statement(Base):
         CheckConstraint("length(file_path) >= 1", name="statement_filepath_nonempty"),
     )
 
+    # Relationship to transactions
+    transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="statement", cascade="all, delete-orphan")
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    statement_id: Mapped[str] = mapped_column(String(64), ForeignKey("statements.id"), nullable=False)
+    
+    # Transaction details
+    transaction_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    balance: Mapped[Optional[Decimal]] = mapped_column(Numeric(15, 2), nullable=True)
+    transaction_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Raw data from CSV
+    raw_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationship to statement
+    statement: Mapped["Statement"] = relationship("Statement", back_populates="transactions")
+
+    __table_args__ = (
+        CheckConstraint("length(id) >= 1", name="transaction_id_nonempty"),
+        CheckConstraint("length(statement_id) >= 1", name="transaction_statement_id_nonempty"),
+        Index("ix_transaction_statement_id", "statement_id"),
+        Index("ix_transaction_date", "transaction_date"),
+        Index("ix_transaction_amount", "amount"),
+    )
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -48,5 +84,4 @@ class Transaction(Base):
     __table_args__ = (
         CheckConstraint("length(id) >= 1", name="transaction_id_nonempty"),
         CheckConstraint("length(statement_id) >= 1", name="transaction_statement_id_nonempty"),
-        UniqueConstraint("statement_id", "ingested_content_hash", name="uq_transaction_statement_content"),
     )

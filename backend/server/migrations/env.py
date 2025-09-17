@@ -6,6 +6,13 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Project imports: settings and model bases for each DB
+import os
+import sys
+from pathlib import Path
+
+# Add the parent directory to the path so we can import server modules
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from server.settings import DATABASE_PATHS
 from server.models.main import Base as MainBase
 from server.models.configurations import Base as ConfigBase

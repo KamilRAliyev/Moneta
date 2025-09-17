@@ -7,6 +7,9 @@ This directory contains documentation for the Moneta backend API.
 ### Statements API
 - **[Statements API Documentation](statements-api.md)** - Complete documentation for statement file upload and management endpoints
 
+### Transactions API
+- **[Transactions API Documentation](transactions-api.md)** - Complete documentation for transaction data management and processing endpoints
+
 ## Project Structure
 
 ```
@@ -59,9 +62,18 @@ TESTING=true pytest tests/
 ### Statements
 - **POST** `/api/statements/upload` - Upload single statement file
 - **POST** `/api/statements/upload-multiple` - Upload multiple statement files (max 10)
+- **POST** `/api/statements/{id}/process` - Process statement and extract transactions
 - **GET** `/api/statements/` - List statements with pagination
 - **GET** `/api/statements/{id}` - Get specific statement
+- **GET** `/api/statements/{id}/transactions` - Get transactions for statement
 - **DELETE** `/api/statements/{id}` - Delete statement
+
+### Transactions
+- **GET** `/api/transactions/` - List transactions with pagination and filtering
+- **GET** `/api/transactions/{id}` - Get specific transaction
+- **GET** `/api/transactions/statement/{id}` - Get transactions by statement
+- **GET** `/api/transactions/search/content` - Search transactions by content
+- **DELETE** `/api/transactions/{id}` - Delete transaction
 
 ### Health
 - **GET** `/api/health` - Health check endpoint
