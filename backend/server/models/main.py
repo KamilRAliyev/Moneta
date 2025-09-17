@@ -44,6 +44,9 @@ class Transaction(Base):
     ingested_content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    computed_content: Mapped[dict] = mapped_column(JSON, nullable=True)
+    computed_content_hash: Mapped[str] = mapped_column(String(64), nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         CheckConstraint("length(id) >= 1", name="transaction_id_nonempty"),
