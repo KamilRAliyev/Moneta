@@ -82,6 +82,33 @@ onMounted(() => {
         </CardContent>
       </Card>
 
+      <!-- Processing Settings -->
+      <Card>
+        <CardHeader>
+          <CardTitle>Processing Settings</CardTitle>
+          <CardDescription>
+            Configure how statements are processed after upload
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="flex items-center space-x-2">
+            <input
+              id="auto-process"
+              v-model="settingsStore.autoProcess"
+              @change="settingsStore.setAutoProcess(settingsStore.autoProcess)"
+              type="checkbox"
+              class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+            />
+            <Label for="auto-process" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Auto-process statements after upload
+            </Label>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            When enabled, statements will be automatically processed to extract transactions immediately after upload.
+          </p>
+        </CardContent>
+      </Card>
+
       <!-- Test Results -->
       <Card v-if="testResult">
         <CardHeader>

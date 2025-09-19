@@ -1,13 +1,22 @@
 import axios from 'axios'
-import { axiosConfig } from './config.js'
+import { useSettingsStore } from '@/stores/settings.js'
 
 // Create axios instance
-const api = axios.create(axiosConfig)
+const api = axios.create({
+  timeout: 5000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
 
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    console.log(`Making request to: ${config.method?.toUpperCase()} ${config.url}`)
+    // Get the current backend URL from settings store
+    const settingsStore = useSettingsStore()
+    config.baseURL = settingsStore.backendUrl
+    
+    console.log(`Making request to: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
     return config
   },
   (error) => {

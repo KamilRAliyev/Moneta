@@ -11,6 +11,12 @@ export const navigationItems = [
     component: Settings
   },
   {
+    name: "Statements",
+    path: "/statements",
+    icon: "FileText",
+    component: () => import('@/views/Statements.vue')
+  },
+  {
     name: "Testing",
     path: "/testing",
     icon: "TestTube",
