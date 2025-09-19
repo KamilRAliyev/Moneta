@@ -147,11 +147,30 @@ class CSVProcessor:
         
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
-                # Try to detect delimiter
-                sample = file.read(1024)
+                # Try to detect delimiter with a larger sample and fallback
+                sample = file.read(4096)  # Increased sample size
                 file.seek(0)
                 sniffer = csv.Sniffer()
-                delimiter = sniffer.sniff(sample).delimiter
+                
+                try:
+                    delimiter = sniffer.sniff(sample).delimiter
+                    logger.info(f"Detected delimiter: {repr(delimiter)}")
+                except csv.Error as e:
+                    logger.warning(f"CSV sniffer failed: {e}, trying fallback delimiters")
+                    # Fallback: try common delimiters
+                    delimiters = [',', ';', '\t', '|']
+                    delimiter = ','
+                    for delim in delimiters:
+                        try:
+                            test_reader = csv.DictReader(file, delimiter=delim)
+                            test_row = next(test_reader)
+                            if len(test_row) > 1:  # More than one column
+                                delimiter = delim
+                                logger.info(f"Using fallback delimiter: {repr(delimiter)}")
+                                break
+                        except:
+                            continue
+                    file.seek(0)  # Reset file position
                 
                 reader = csv.DictReader(file, delimiter=delimiter)
                 
