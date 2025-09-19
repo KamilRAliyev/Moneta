@@ -1,9 +1,18 @@
 <script setup>
-import { Button } from "@/components/ui/button"
+import Sidebar from '@/components/Sidebar.vue'
+import AlertContainer from '@/components/AlertContainer.vue'
+import { TooltipProvider } from '@/components/ui/tooltip'
 </script>
 
 <template>
-<Button>Click me</Button>
+<TooltipProvider>
+  <Sidebar>
+    <div class="h-full overflow-auto">
+      <router-view />
+    </div>
+  </Sidebar>
+  <AlertContainer />
+</TooltipProvider>
 </template>
 
 <style scoped>
