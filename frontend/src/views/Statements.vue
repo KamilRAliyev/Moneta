@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { FileText, Upload, Play, Trash2, Download } from 'lucide-vue-next'
+import { FileText, Upload, Play, Trash2, Download, RefreshCw } from 'lucide-vue-next'
 
 const statementsStore = useStatementsStore()
 const settingsStore = useSettingsStore()
@@ -181,6 +181,17 @@ const triggerFileUpload = () => {
               >
                 <Play class="h-3 w-3 mr-1" />
                 Process
+              </Button>
+              
+              <Button
+                v-if="statement.processed"
+                @click="statementsStore.reprocessStatement(statement.id)"
+                size="sm"
+                variant="outline"
+                :disabled="statementsStore.loading"
+              >
+                <RefreshCw class="h-3 w-3 mr-1" />
+                Reprocess
               </Button>
               
               <Button

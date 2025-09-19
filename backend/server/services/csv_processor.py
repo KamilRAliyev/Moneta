@@ -114,12 +114,15 @@ class CSVProcessor:
                 statement.columns = columns_info
             
             # Process and save transactions
-            created_count = self._save_transactions(statement, transactions_data, db)
+            save_result = self._save_transactions(statement, transactions_data, db)
+            created_count = save_result["created_count"]
+            duplicate_count = save_result["duplicate_count"]
             
             # Update columns info with transaction count after processing
             if statement.columns:
                 statement.columns["transaction_count"] = created_count
                 statement.columns["total_processed"] = len(transactions_data)
+                statement.columns["duplicate_count"] = duplicate_count
             
             # Mark statement as processed
             statement.processed = True
@@ -127,9 +130,10 @@ class CSVProcessor:
             
             return {
                 "success": True,
-                "message": f"Successfully processed {created_count} transactions",
+                "message": f"Successfully processed {created_count} transactions ({duplicate_count} duplicates skipped)",
                 "transactions_processed": len(transactions_data),
-                "transactions_created": created_count
+                "transactions_created": created_count,
+                "duplicates_skipped": duplicate_count
             }
             
         except Exception as e:
@@ -263,9 +267,10 @@ class CSVProcessor:
         
         return columns_info
 
-    def _save_transactions(self, statement: Statement, transactions_data: List[Dict[str, Any]], db: Session) -> int:
+    def _save_transactions(self, statement: Statement, transactions_data: List[Dict[str, Any]], db: Session) -> Dict[str, int]:
         """Save transactions to database."""
         created_count = 0
+        duplicate_count = 0
         
         for transaction_data in transactions_data:
             try:
@@ -282,6 +287,7 @@ class CSVProcessor:
                 
                 if existing_transaction:
                     logger.info(f"Transaction already exists, skipping: {content_hash}")
+                    duplicate_count += 1
                     continue
                 
                 # Create new transaction
@@ -300,6 +306,7 @@ class CSVProcessor:
                 # Handle unique constraint violation at database level
                 if "uq_transaction_statement_content" in str(e):
                     logger.info(f"Transaction already exists (database constraint), skipping: {content_hash}")
+                    duplicate_count += 1
                     db.rollback()
                     continue
                 else:
@@ -312,7 +319,10 @@ class CSVProcessor:
                 continue
         
         db.commit()
-        return created_count
+        return {
+            "created_count": created_count,
+            "duplicate_count": duplicate_count
+        }
     
     def get_transaction_summary(self, statement_id: str, db: Session) -> Dict[str, Any]:
         """Get summary of transactions for a statement."""

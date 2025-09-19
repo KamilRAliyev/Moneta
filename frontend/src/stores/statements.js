@@ -170,10 +170,41 @@ export const useStatementsStore = defineStore('statements', () => {
       // Update statement in store
       statement.processed = true
       
-      success(`Statement "${statement.filename}" processed successfully. ${response.transactions_created} transactions created.`)
+      const duplicatesSkipped = response.transactions_processed - response.transactions_created
+      const message = duplicatesSkipped > 0 
+        ? `Statement "${statement.filename}" processed successfully. ${response.transactions_created} transactions created, ${duplicatesSkipped} duplicates skipped.`
+        : `Statement "${statement.filename}" processed successfully. ${response.transactions_created} transactions created.`
+      
+      success(message)
       return response
     } catch (err) {
       error(`Failed to process statement "${statement.filename}"`)
+      throw err
+    }
+  }
+  
+  async function reprocessStatement(statementId) {
+    const statement = statements.value.find(s => s.id === statementId)
+    if (!statement) return
+    
+    try {
+      // Reset processed status before reprocessing
+      statement.processed = false
+      
+      const response = await statementsApi.processStatement(statementId)
+      
+      // Update statement in store
+      statement.processed = true
+      
+      const duplicatesSkipped = response.transactions_processed - response.transactions_created
+      const message = duplicatesSkipped > 0 
+        ? `Statement "${statement.filename}" reprocessed successfully. ${response.transactions_created} transactions created, ${duplicatesSkipped} duplicates skipped.`
+        : `Statement "${statement.filename}" reprocessed successfully. ${response.transactions_created} transactions created.`
+      
+      success(message)
+      return response
+    } catch (err) {
+      error(`Failed to reprocess statement "${statement.filename}"`)
       throw err
     }
   }
@@ -234,6 +265,7 @@ export const useStatementsStore = defineStore('statements', () => {
     uploadStatement,
     uploadMultipleStatements,
     processStatement,
+    reprocessStatement,
     deleteStatement,
     getStatementTransactions,
     clearStatements
