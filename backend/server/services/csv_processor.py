@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import json
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -19,6 +20,60 @@ class CSVProcessor:
     
     def __init__(self):
         self.supported_formats = ['.csv', '.xlsx', '.xls']
+    
+    @staticmethod
+    def normalize_column_name(column_name: str) -> str:
+        """
+        Normalize column names to a consistent format.
+        
+        This function:
+        - Strips whitespace
+        - Converts to lowercase
+        - Removes currency symbols ($, €, £, etc.)
+        - Removes parentheses and their contents
+        - Replaces spaces and special characters with underscores
+        - Removes multiple consecutive underscores
+        - Strips leading/trailing underscores
+        
+        Args:
+            column_name: Original column name
+            
+        Returns:
+            Normalized column name
+        """
+        if not column_name or not isinstance(column_name, str):
+            return ""
+        
+        # Strip whitespace and convert to lowercase
+        normalized = column_name.strip().lower()
+        
+        # Remove currency symbols and common financial symbols
+        currency_symbols = r'[$€£¥₹₽₩₪₫₨₴₸₺₼₾₿]'
+        normalized = re.sub(currency_symbols, '', normalized)
+        
+        # Remove parentheses and their contents
+        normalized = re.sub(r'\([^)]*\)', '', normalized)
+        
+        # Remove square brackets and their contents
+        normalized = re.sub(r'\[[^\]]*\]', '', normalized)
+        
+        # Replace spaces, hyphens, and other separators with underscores
+        normalized = re.sub(r'[\s\-\.\/\\]+', '_', normalized)
+        
+        # Remove special characters except underscores
+        normalized = re.sub(r'[^\w_]', '', normalized)
+        
+        # Remove multiple consecutive underscores
+        normalized = re.sub(r'_+', '_', normalized)
+        
+        # Strip leading and trailing underscores
+        normalized = normalized.strip('_')
+        
+        # Ensure we have a valid name (not empty)
+        if not normalized or normalized.strip() == "":
+            normalized = "unnamed_column"
+        
+        return normalized
     
     def process_statement(self, statement: Statement, db: Session) -> Dict[str, Any]:
         """
@@ -60,6 +115,11 @@ class CSVProcessor:
             
             # Process and save transactions
             created_count = self._save_transactions(statement, transactions_data, db)
+            
+            # Update columns info with transaction count after processing
+            if statement.columns:
+                statement.columns["transaction_count"] = created_count
+                statement.columns["total_processed"] = len(transactions_data)
             
             # Mark statement as processed
             statement.processed = True
@@ -138,25 +198,25 @@ class CSVProcessor:
         return transactions
     
     def _clean_row_data(self, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Clean and standardize row data."""
+        """Clean and standardize row data using normalized column names."""
         # Remove empty rows
         if not any(str(value).strip() for value in row.values() if value is not None):
             return None
         
-        # Clean the data
+        # Clean the data with normalized column names
         cleaned_row = {}
         for key, value in row.items():
             if key is None:
                 continue
                 
-            # Clean key name
-            clean_key = str(key).strip().lower().replace(' ', '_').replace('-', '_')
+            # Normalize key name using the normalization function
+            normalized_key = self.normalize_column_name(str(key))
             
             # Clean value
             if value is None or (isinstance(value, str) and not value.strip()):
-                cleaned_row[clean_key] = None
+                cleaned_row[normalized_key] = None
             else:
-                cleaned_row[clean_key] = str(value).strip()
+                cleaned_row[normalized_key] = str(value).strip()
         
         return cleaned_row
     
@@ -171,43 +231,16 @@ class CSVProcessor:
             Dictionary with normalized column information
         """
         columns_info = {
-            "original_columns": list(sample_transaction.keys()),
-            "normalized_columns": {},
+            "normalized_columns": list(sample_transaction.keys()),
             "column_count": len(sample_transaction.keys()),
-            "detected_fields": {}
+            "column_details": {
+                col: {
+                    "type": type(sample_transaction[col]).__name__,
+                    "has_value": sample_transaction[col] is not None and str(sample_transaction[col]).strip() != ""
+                }
+                for col in sample_transaction.keys()
+            }
         }
-        
-        # Common field mappings for normalization
-        field_mappings = {
-            # Date fields
-            'date': ['date', 'transaction_date', 'posting_date', 'value_date', 'effective_date'],
-            'description': ['description', 'memo', 'payee', 'merchant', 'transaction_details', 'narrative'],
-            'amount': ['amount', 'transaction_amount', 'debit', 'credit', 'value'],
-            'balance': ['balance', 'running_balance', 'account_balance', 'available_balance'],
-            'reference': ['reference', 'ref', 'transaction_id', 'check_number', 'trace_number'],
-            'type': ['type', 'transaction_type', 'debit_credit', 'dr_cr'],
-            'category': ['category', 'classification', 'subcategory'],
-            'account': ['account', 'account_number', 'account_name'],
-            'currency': ['currency', 'ccy', 'currency_code']
-        }
-        
-        # Detect and map fields
-        for original_col in sample_transaction.keys():
-            original_lower = original_col.lower().strip()
-            normalized_field = None
-            
-            # Find matching normalized field
-            for norm_field, possible_names in field_mappings.items():
-                if any(name in original_lower for name in possible_names):
-                    normalized_field = norm_field
-                    break
-            
-            if normalized_field:
-                columns_info["normalized_columns"][original_col] = normalized_field
-                columns_info["detected_fields"][normalized_field] = original_col
-            else:
-                # Keep as custom field
-                columns_info["normalized_columns"][original_col] = f"custom_{original_lower.replace(' ', '_')}"
         
         return columns_info
 
