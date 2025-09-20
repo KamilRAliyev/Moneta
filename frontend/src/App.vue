@@ -11,12 +11,12 @@ const transactionsStore = useTransactionsStore()
 const { info, success, error } = useAlert()
 
 onMounted(async () => {
-  // Start background fetching of all transactions
-  console.log('App mounted - starting background transaction fetch')
-  info('Loading transactions...', { persistent: true })
+  // Initialize transactions once on app mount
+  console.log('App mounted - initializing transactions')
+  info('Loading transactions...', { persistent: false })
   
   try {
-    await transactionsStore.startBackgroundFetch()
+    await transactionsStore.initializeTransactions()
     success(`Loaded ${transactionsStore.totalCount} transactions`)
   } catch (err) {
     error('Failed to load transactions')

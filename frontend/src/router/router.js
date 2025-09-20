@@ -5,9 +5,9 @@ import Testing from '@/views/Testing.vue'
 // Single source of truth for both navigation and routes
 export const navigationItems = [
   {
-    name: "Settings",
+    name: "Dashboard",
     path: "/",
-    icon: "Settings",
+    icon: "DashBoard",
     component: Settings
   },
   {
@@ -15,6 +15,12 @@ export const navigationItems = [
     path: "/statements",
     icon: "FileText",
     component: () => import('@/views/Statements.vue')
+  },
+  {
+    name: "Transactions",
+    path: "/transactions",
+    icon: "CreditCard",
+    component: () => import('@/views/Transactions.vue')
   },
   {
     name: "Testing",

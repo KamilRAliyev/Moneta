@@ -17,8 +17,6 @@ export const useTransactionsStore = defineStore('transactions', () => {
   const searchTotal = ref(0)
   const selectedStatementId = ref(null)
   
-  // Background fetch interval (in milliseconds)
-  const BACKGROUND_FETCH_INTERVAL = 30000 // 30 seconds
   
   // Getters
   const hasTransactions = computed(() => transactions.value.length > 0)
@@ -164,11 +162,6 @@ export const useTransactionsStore = defineStore('transactions', () => {
       
       console.log(`Fetched ${allTransactions.length} transactions in background`)
       
-      // Show success alert for background fetch
-      if (allTransactions.length > 0) {
-        success(`Background fetch: ${allTransactions.length} transactions loaded`)
-      }
-      
       return allTransactions
     } catch (err) {
       console.error('Failed to fetch all transactions in background:', err)
@@ -267,47 +260,16 @@ export const useTransactionsStore = defineStore('transactions', () => {
     return fetchTransactions(selectedStatementId.value)
   }
   
-  // Background fetch management
-  let backgroundFetchInterval = null
-  
-  function startBackgroundFetch() {
-    if (backgroundFetchInterval) {
-      clearInterval(backgroundFetchInterval)
-    }
-    
-    // Initial fetch
-    fetchAllTransactions().catch(err => {
-      console.warn('Initial background fetch failed:', err)
-    })
-    
-    // Set up interval
-    backgroundFetchInterval = setInterval(() => {
-      fetchAllTransactions().catch(err => {
-        console.warn('Background fetch failed:', err)
-      })
-    }, BACKGROUND_FETCH_INTERVAL)
-    
-    console.log('Started background transaction fetching')
-  }
-  
-  function stopBackgroundFetch() {
-    if (backgroundFetchInterval) {
-      clearInterval(backgroundFetchInterval)
-      backgroundFetchInterval = null
-      console.log('Stopped background transaction fetching')
+  // Initialize transactions on first load
+  async function initializeTransactions() {
+    try {
+      await fetchAllTransactions()
+      console.log('Transactions initialized successfully')
+    } catch (err) {
+      console.warn('Failed to initialize transactions:', err)
+      throw err
     }
   }
-  
-  function isStaleData() {
-    if (!lastFetchTime.value) return true
-    
-    const now = new Date()
-    const timeDiff = now - lastFetchTime.value
-    return timeDiff > BACKGROUND_FETCH_INTERVAL
-  }
-  
-  // Background fetching is now controlled by App.vue
-  // startBackgroundFetch() - removed auto-start
   
   return {
     // State
@@ -342,8 +304,6 @@ export const useTransactionsStore = defineStore('transactions', () => {
     clearSearch,
     clearTransactions,
     refreshTransactions,
-    startBackgroundFetch,
-    stopBackgroundFetch,
-    isStaleData
+    initializeTransactions
   }
 })
