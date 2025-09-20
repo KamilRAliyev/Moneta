@@ -259,17 +259,61 @@ export const useTransactionsStore = defineStore('transactions', () => {
   function refreshTransactions() {
     return fetchTransactions(selectedStatementId.value)
   }
-  
-  // Initialize transactions on first load
-  async function initializeTransactions() {
+
+  // Filtered transactions methods
+  async function fetchFilteredTransactions({ columns, skip = 0, limit = 100 } = {}) {
+    loading.value = true
     try {
-      await fetchAllTransactions()
-      console.log('Transactions initialized successfully')
+      const response = await transactionsApi.getFilteredTransactions({ 
+        columns, 
+        skip, 
+        limit 
+      })
+      
+      // For filtered transactions, we don't store them in the main transactions array
+      // They are returned directly for display purposes
+      return response
     } catch (err) {
-      console.warn('Failed to initialize transactions:', err)
+      error('Failed to fetch filtered transactions', { persistent: true })
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchFilteredTransactionsWithPagination({ 
+    columns, 
+    skip = 0, 
+    limit = 100 
+  } = {}) {
+    backgroundLoading.value = true
+    try {
+      const response = await transactionsApi.getFilteredTransactions({ 
+        columns, 
+        skip, 
+        limit 
+      })
+      
+      return response
+    } catch (err) {
+      error('Failed to fetch filtered transactions', { persistent: true })
+      throw err
+    } finally {
+      backgroundLoading.value = false
+    }
+  }
+
+  // Metadata methods
+  async function fetchTransactionMetadata() {
+    try {
+      const response = await transactionsApi.getTransactionMetadata()
+      return response
+    } catch (err) {
+      error('Failed to fetch transaction metadata', { persistent: true })
       throw err
     }
   }
+  
   
   return {
     // State
@@ -304,6 +348,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
     clearSearch,
     clearTransactions,
     refreshTransactions,
-    initializeTransactions
+    fetchFilteredTransactions,
+    fetchFilteredTransactionsWithPagination,
+    fetchTransactionMetadata
   }
 })

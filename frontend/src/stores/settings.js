@@ -36,6 +36,36 @@ export const useSettingsStore = defineStore('settings', () => {
   const backendUrl = ref(getInitialBackendUrl())
   const autoProcess = ref(getInitialAutoProcess())
   
+  // Table column settings
+  const getInitialSelectedColumns = () => {
+    try {
+      const saved = localStorage.getItem('app-settings')
+      if (saved) {
+        const settings = JSON.parse(saved)
+        return settings.selectedColumns || []
+      }
+    } catch (error) {
+      console.error('Failed to load selected columns:', error)
+    }
+    return []
+  }
+  
+  const getInitialColumnWidths = () => {
+    try {
+      const saved = localStorage.getItem('app-settings')
+      if (saved) {
+        const settings = JSON.parse(saved)
+        return settings.columnWidths || {}
+      }
+    } catch (error) {
+      console.error('Failed to load column widths:', error)
+    }
+    return {}
+  }
+  
+  const selectedColumns = ref(getInitialSelectedColumns())
+  const columnWidths = ref(getInitialColumnWidths())
+  
   // Computed properties
   const theme = computed(() => isDark.value ? 'dark' : 'light')
   
@@ -66,11 +96,27 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSettings()
   }
   
+  const setSelectedColumns = (columns) => {
+    selectedColumns.value = columns
+    saveSettings()
+  }
+  
+  const getTableColumnWidth = (columnKey, defaultWidth = 150) => {
+    return columnWidths.value[columnKey] || defaultWidth
+  }
+  
+  const setTableColumnWidth = (columnKey, width) => {
+    columnWidths.value[columnKey] = width
+    saveSettings()
+  }
+  
   const saveSettings = () => {
     const settings = {
       theme: theme.value,
       backendUrl: backendUrl.value,
-      autoProcess: autoProcess.value
+      autoProcess: autoProcess.value,
+      selectedColumns: selectedColumns.value,
+      columnWidths: columnWidths.value
     }
     localStorage.setItem('app-settings', JSON.stringify(settings))
   }
@@ -104,6 +150,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setTheme(prefersDark ? 'dark' : 'light')
     backendUrl.value = 'http://localhost:8000'
     autoProcess.value = false
+    selectedColumns.value = []
+    columnWidths.value = {}
   }
   
   return {
@@ -111,6 +159,8 @@ export const useSettingsStore = defineStore('settings', () => {
     isDark,
     backendUrl,
     autoProcess,
+    selectedColumns,
+    columnWidths,
     // Computed
     theme,
     // Actions
@@ -118,6 +168,9 @@ export const useSettingsStore = defineStore('settings', () => {
     setTheme,
     setBackendUrl,
     setAutoProcess,
+    setSelectedColumns,
+    getTableColumnWidth,
+    setTableColumnWidth,
     loadSettings,
     saveSettings,
     resetSettings

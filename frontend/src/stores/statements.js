@@ -41,7 +41,7 @@ export const useStatementsStore = defineStore('statements', () => {
       
       return response
     } catch (err) {
-      error('Failed to fetch statements', { persistent: true })
+      error('Failed to fetch statements', { persistent: false })
       throw err
     } finally {
       loading.value = false
@@ -86,7 +86,7 @@ export const useStatementsStore = defineStore('statements', () => {
       if (err.response?.status === 409) {
         warning(`Statement "${file.name}" already exists`)
       } else {
-        error(`Failed to upload "${file.name}"`)
+        error(`Failed to upload "${file.name}"`, { persistent: false })
       }
       throw err
     } finally {

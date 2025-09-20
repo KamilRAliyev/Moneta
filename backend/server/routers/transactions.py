@@ -93,25 +93,23 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
             db.commit()
             db.refresh(meta)
         
-        # If metadata is empty, populate it from existing transactions
-        if not meta.ingested_columns:
-            all_ingested_columns = set()
-            all_computed_columns = set()
-            
-            # Get all transactions and collect unique columns
-            transactions = db.query(Transaction).all()
-            for transaction in transactions:
-                if transaction.ingested_content:
-                    all_ingested_columns.update(transaction.ingested_content.keys())
-                if transaction.computed_content:
-                    all_computed_columns.update(transaction.computed_content.keys())
-            
-            # Update metadata with collected columns
-            if all_ingested_columns or all_computed_columns:
-                meta.ingested_columns = {col: True for col in all_ingested_columns}
-                meta.computed_columns = {col: True for col in all_computed_columns}
-                meta.updated_at = datetime.utcnow()
-                db.commit()
+        # Regenerate metadata from all existing transactions on each call
+        all_ingested_columns = set()
+        all_computed_columns = set()
+        
+        # Get all transactions and collect unique columns
+        transactions = db.query(Transaction).all()
+        for transaction in transactions:
+            if transaction.ingested_content:
+                all_ingested_columns.update(transaction.ingested_content.keys())
+            if transaction.computed_content:
+                all_computed_columns.update(transaction.computed_content.keys())
+        
+        # Update metadata with collected columns
+        meta.ingested_columns = {col: True for col in all_ingested_columns}
+        meta.computed_columns = {col: True for col in all_computed_columns}
+        meta.updated_at = datetime.utcnow()
+        db.commit()
         
         return {
             "ingested_columns": meta.ingested_columns or {},
@@ -121,6 +119,89 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve transaction metadata: {str(e)}")
+
+@router.get("/filtered")
+async def get_filtered_transactions(
+    columns: Optional[str] = Query(None, description="Comma-separated list of columns to include"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100000, description="Maximum number of records to return"),
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Get transactions filtered by specific columns with pagination.
+    
+    Args:
+        columns: Comma-separated list of columns to include in response
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        db: Database session
+    
+    Returns:
+        List of transactions with only specified columns
+    """
+    try:
+        query = db.query(Transaction).options(joinedload(Transaction.statement))
+        
+        total = query.count()
+        transactions = query.offset(skip).limit(limit).all()
+        
+        # Parse columns filter
+        selected_columns = None
+        if columns:
+            selected_columns = [col.strip() for col in columns.split(',')]
+        
+        result_transactions = []
+        for t in transactions:
+            transaction_data = {
+                "id": t.id,
+                "statement_id": t.statement_id,
+                "created_at": t.created_at.isoformat(),
+                "ingested_at": t.ingested_at.isoformat(),
+                "computed_at": t.computed_at.isoformat() if t.computed_at else None
+            }
+            
+            # Add ingested content (filtered by columns if specified)
+            if t.ingested_content:
+                if selected_columns:
+                    transaction_data["ingested_content"] = {
+                        col: t.ingested_content[col] 
+                        for col in selected_columns 
+                        if col in t.ingested_content
+                    }
+                else:
+                    transaction_data["ingested_content"] = t.ingested_content
+            
+            # Add computed content (filtered by columns if specified)
+            if t.computed_content:
+                if selected_columns:
+                    transaction_data["computed_content"] = {
+                        col: t.computed_content[col] 
+                        for col in selected_columns 
+                        if col in t.computed_content
+                    }
+                else:
+                    transaction_data["computed_content"] = t.computed_content
+            
+            # Add statement info
+            transaction_data["statement"] = {
+                "id": t.statement.id,
+                "filename": t.statement.filename,
+                "mime_type": t.statement.mime_type,
+                "processed": t.statement.processed,
+                "created_at": t.statement.created_at.isoformat()
+            }
+            
+            result_transactions.append(transaction_data)
+        
+        return {
+            "transactions": result_transactions,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "columns_filter": selected_columns
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/{transaction_id}")
 async def get_transaction(

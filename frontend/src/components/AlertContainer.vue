@@ -28,7 +28,7 @@ const getAlertVariant = (type) => {
 </script>
 
 <template>
-  <div class="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+  <div class="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm">
     <TransitionGroup
       name="alert"
       tag="div"
@@ -91,11 +91,11 @@ const getAlertVariant = (type) => {
 
 .alert-enter-from {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateY(100%) translateX(100%);
 }
 
 .alert-leave-to {
   opacity: 0;
-  transform: translateX(100%);
+  transform: translateY(100%) translateX(100%);
 }
 </style>

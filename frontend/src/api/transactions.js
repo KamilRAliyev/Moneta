@@ -70,5 +70,32 @@ export const transactionsApi = {
       params: { q: query, skip, limit }
     })
     return response.data
+  },
+
+  /**
+   * Get filtered transactions with column selection and pagination
+   * @param {Object} params - Query parameters
+   * @param {string} params.columns - Comma-separated list of columns to include
+   * @param {number} params.skip - Number of records to skip (default: 0)
+   * @param {number} params.limit - Maximum number of records to return (default: 100, max: 100000)
+   * @returns {Promise} Response data
+   */
+  async getFilteredTransactions({ columns, skip = 0, limit = 100 } = {}) {
+    const params = { skip, limit }
+    if (columns) {
+      params.columns = columns
+    }
+    
+    const response = await api.get('/transactions/filtered', { params })
+    return response.data
+  },
+
+  /**
+   * Get transaction metadata (available columns)
+   * @returns {Promise} Response data with ingested and computed columns
+   */
+  async getTransactionMetadata() {
+    const response = await api.get('/transactions/metadata')
+    return response.data
   }
 }
