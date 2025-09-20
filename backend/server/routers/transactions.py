@@ -12,7 +12,7 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 @router.get("/")
 async def list_transactions(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(100, ge=1, le=100000, description="Maximum number of records to return"),
     statement_id: Optional[str] = Query(None, description="Filter by statement ID"),
     db: Session = Depends(lambda: get_db("main"))
 ):
@@ -146,7 +146,7 @@ async def delete_transaction(
 async def get_transactions_by_statement(
     statement_id: str,
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(100, ge=1, le=100000, description="Maximum number of records to return"),
     db: Session = Depends(lambda: get_db("main"))
 ):
     """
@@ -206,7 +206,7 @@ async def get_transactions_by_statement(
 async def search_transactions_by_content(
     q: str = Query(..., description="Search query for transaction content"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(100, ge=1, le=100000, description="Maximum number of records to return"),
     db: Session = Depends(lambda: get_db("main"))
 ):
     """
