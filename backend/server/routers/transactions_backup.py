@@ -93,26 +93,6 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
             db.commit()
             db.refresh(meta)
         
-        # If metadata is empty, populate it from existing transactions
-        if not meta.ingested_columns:
-            all_ingested_columns = set()
-            all_computed_columns = set()
-            
-            # Get all transactions and collect unique columns
-            transactions = db.query(Transaction).all()
-            for transaction in transactions:
-                if transaction.ingested_content:
-                    all_ingested_columns.update(transaction.ingested_content.keys())
-                if transaction.computed_content:
-                    all_computed_columns.update(transaction.computed_content.keys())
-            
-            # Update metadata with collected columns
-            if all_ingested_columns or all_computed_columns:
-                meta.ingested_columns = {col: True for col in all_ingested_columns}
-                meta.computed_columns = {col: True for col in all_computed_columns}
-                meta.updated_at = datetime.utcnow()
-                db.commit()
-        
         return {
             "ingested_columns": meta.ingested_columns or {},
             "computed_columns": meta.computed_columns or {},
@@ -316,3 +296,38 @@ async def search_transactions_by_content(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/metadata")
+async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))):
+    """
+    Get the metadata for all transactions (singleton pattern).
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Metadata for all transactions
+    """
+    try:
+        # Try to get the singleton metadata record
+        meta = db.query(TransactionMetadata).first()
+        
+        if not meta:
+            # Create the singleton record if it doesn't exist
+            meta = TransactionMetadata(
+                id="1",
+                ingested_columns={},
+                computed_columns={}
+            )
+            db.add(meta)
+            db.commit()
+            db.refresh(meta)
+        
+        return {
+            "ingested_columns": meta.ingested_columns or {},
+            "computed_columns": meta.computed_columns or {},
+            "updated_at": meta.updated_at.isoformat() if meta.updated_at else None,
+            "created_at": meta.created_at.isoformat() if meta.created_at else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve transaction metadata: {str(e)}")

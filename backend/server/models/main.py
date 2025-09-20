@@ -54,3 +54,12 @@ class Transaction(Base):
         CheckConstraint("length(statement_id) >= 1", name="transaction_statement_id_nonempty"),
         UniqueConstraint("statement_id", "ingested_content_hash", name="uq_transaction_statement_content"),
     )
+
+class TransactionMetadata(Base):
+    __tablename__ = "transaction_metadata"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=1)
+    ingested_columns: Mapped[dict] = mapped_column(JSON, default=dict)
+    computed_columns: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -12,6 +12,7 @@ import logging
 from server.models.main import Transaction, Statement
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from server.services.metadata import update_transaction_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -272,8 +273,19 @@ class CSVProcessor:
         created_count = 0
         duplicate_count = 0
         
+        # Collect all unique columns from all transactions
+        all_ingested_columns = set()
+        all_computed_columns = set()
+        
         for transaction_data in transactions_data:
             try:
+                # Collect unique columns
+                all_ingested_columns.update(transaction_data.keys())
+                
+                # For future: collect computed columns when they exist
+                # This will be populated when computed content is available
+                # all_computed_columns.update(transaction_data.get('computed_columns', {}).keys())
+                
                 # Create hash of the transaction content
                 content_hash = hashlib.sha256(
                     json.dumps(transaction_data, sort_keys=True).encode('utf-8')
@@ -297,7 +309,7 @@ class CSVProcessor:
                     ingested_content_hash=content_hash,
                     ingested_at=datetime.utcnow()
                 )
-                
+
                 db.add(transaction)
                 db.flush()  # Flush to trigger database constraint check
                 created_count += 1
@@ -318,12 +330,48 @@ class CSVProcessor:
                 db.rollback()
                 continue
         
+        # Update metadata once with all collected columns
+        if all_ingested_columns or all_computed_columns:
+            ingested_columns_dict = {col: True for col in all_ingested_columns}
+            computed_columns_dict = {col: True for col in all_computed_columns}
+            update_transaction_metadata(db, ingested_columns_dict, computed_columns_dict)
+        
+        # Also update metadata with all existing transactions for this statement
+        self._update_metadata_from_existing_transactions(statement.id, db)
+        
         db.commit()
         return {
             "created_count": created_count,
             "duplicate_count": duplicate_count
         }
     
+    def _update_metadata_from_existing_transactions(self, statement_id: str, db: Session):
+        """Update metadata with all existing transactions for a statement."""
+        try:
+            # Get all existing transactions for this statement
+            existing_transactions = db.query(Transaction).filter(Transaction.statement_id == statement_id).all()
+            
+            if not existing_transactions:
+                return
+            
+            # Collect all unique columns from existing transactions
+            all_existing_ingested_columns = set()
+            all_existing_computed_columns = set()
+            for transaction in existing_transactions:
+                if transaction.ingested_content:
+                    all_existing_ingested_columns.update(transaction.ingested_content.keys())
+                if transaction.computed_content:
+                    all_existing_computed_columns.update(transaction.computed_content.keys())
+            
+            # Update metadata with existing columns
+            if all_existing_ingested_columns or all_existing_computed_columns:
+                ingested_columns_dict = {col: True for col in all_existing_ingested_columns}
+                computed_columns_dict = {col: True for col in all_existing_computed_columns}
+                update_transaction_metadata(db, ingested_columns_dict, computed_columns_dict)
+                
+        except Exception as e:
+            logger.error(f"Error updating metadata from existing transactions: {str(e)}")
+
     def get_transaction_summary(self, statement_id: str, db: Session) -> Dict[str, Any]:
         """Get summary of transactions for a statement."""
         transactions = db.query(Transaction).filter(Transaction.statement_id == statement_id).all()
