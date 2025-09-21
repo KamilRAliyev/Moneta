@@ -27,6 +27,7 @@ const pageSize = ref(100)
 const loading = ref(false)
 const metadataLoading = ref(false)
 const showColumnDropdown = ref(false)
+const showDebugInfo = ref(false)
 
 // Computed
 const availableColumns = computed(() => {
@@ -299,6 +300,14 @@ onUnmounted(() => {
           <RefreshCw :class="['h-4 w-4 mr-2', { 'animate-spin': metadataLoading }]" />
           Refresh Metadata
         </Button>
+        <Button 
+          @click="showDebugInfo = !showDebugInfo"
+          variant="outline"
+          size="sm"
+        >
+          <Settings class="h-4 w-4 mr-2" />
+          {{ showDebugInfo ? 'Hide' : 'Show' }} Debug
+        </Button>
         <div class="relative dropdown-container">
           <Button 
             @click="showColumnDropdown = !showColumnDropdown"
@@ -451,16 +460,27 @@ onUnmounted(() => {
     </div>
 
     <!-- Debug Info -->
-    <div class="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md text-sm">
-      <p><strong>Debug Info:</strong></p>
-      <p>Has Selected Columns: {{ hasSelectedColumns }}</p>
-      <p>Selected Columns: {{ selectedColumns.length }} ({{ selectedColumns.join(', ') }})</p>
-      <p>Filtered Transactions: {{ filteredTransactions.length }}</p>
-      <p>Table Data: {{ tableData.length }} rows</p>
-      <p>Table Columns: {{ tableColumns.length }} columns</p>
-      <p>Loading: {{ loading }}</p>
-      <p>Available Columns: {{ availableColumns.length }} categories</p>
-      <p>Metadata: ingested={{ Object.keys(metadata.ingested_columns || {}).length }}, computed={{ Object.keys(metadata.computed_columns || {}).length }}</p>
+    <div v-if="showDebugInfo" class="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border text-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-900 dark:text-gray-100">Debug Information</h3>
+        <Button @click="showDebugInfo = false" variant="ghost" size="sm" class="h-6 w-6 p-0">
+          <span class="text-lg leading-none">&times;</span>
+        </Button>
+      </div>
+      <div class="grid grid-cols-2 gap-4 text-gray-600 dark:text-gray-300">
+        <div>
+          <p><strong>Has Selected Columns:</strong> {{ hasSelectedColumns }}</p>
+          <p><strong>Selected Columns:</strong> {{ selectedColumns.length }} ({{ selectedColumns.join(', ') }})</p>
+          <p><strong>Filtered Transactions:</strong> {{ filteredTransactions.length }}</p>
+          <p><strong>Table Data:</strong> {{ tableData.length }} rows</p>
+        </div>
+        <div>
+          <p><strong>Table Columns:</strong> {{ tableColumns.length }} columns</p>
+          <p><strong>Loading:</strong> {{ loading }}</p>
+          <p><strong>Available Columns:</strong> {{ availableColumns.length }} categories</p>
+          <p><strong>Metadata:</strong> ingested={{ Object.keys(metadata.ingested_columns || {}).length }}, computed={{ Object.keys(metadata.computed_columns || {}).length }}</p>
+        </div>
+      </div>
     </div>
 
     <!-- Data Table -->
