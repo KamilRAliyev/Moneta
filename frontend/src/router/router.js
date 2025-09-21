@@ -29,6 +29,12 @@ export const navigationItems = [
     component: Testing
   },
   {
+    name: "Computed Field Rules",
+    path: "/rules",
+    icon: "FileCog",
+    component: () => import('@/views/ComputedFieldRules.vue')
+  },
+  {
     name: "Settings",
     path: "/settings", 
     icon: "Settings",

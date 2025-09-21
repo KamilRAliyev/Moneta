@@ -4,6 +4,7 @@ from server.routers.general import router as general_router
 from server.routers.statements import router as statements_router
 from server.routers.transactions import router as transactions_router
 from server.routers.formulas import router as formulas_router
+from server.routers.rules import router as rules_router
 
 def create_app() -> FastAPI:
     app = FastAPI()
@@ -11,6 +12,7 @@ def create_app() -> FastAPI:
     app.include_router(statements_router, prefix="/api")
     app.include_router(transactions_router, prefix="/api")
     app.include_router(formulas_router, prefix="/api")
+    app.include_router(rules_router, prefix="/api")
     
     # CORS settings
     app.add_middleware(

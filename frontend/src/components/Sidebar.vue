@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import HealthMonitor from '@/components/HealthMonitor.vue'
 import { navigationItems } from '@/router/router.js'
-import { Home, CreditCard, BarChart3, Settings, TestTube, FileText, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Home, CreditCard, BarChart3, Settings, TestTube, FileText, ChevronLeft, ChevronRight, FileCog } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -30,7 +30,8 @@ const getIcon = (iconName) => {
     BarChart3,
     Settings,
     TestTube,
-    FileText
+    FileText, 
+    FileCog
   }
   return icons[iconName] || Home
 }
