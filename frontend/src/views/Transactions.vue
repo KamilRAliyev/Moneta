@@ -28,6 +28,8 @@ const loading = ref(false)
 const metadataLoading = ref(false)
 const showColumnDropdown = ref(false)
 const showDebugInfo = ref(false)
+const showJsonModal = ref(false)
+const selectedTransactionJson = ref(null)
 
 // Computed
 const availableColumns = computed(() => {
@@ -66,7 +68,8 @@ const tableColumns = computed(() => {
   const cols = [
     { key: 'id', label: 'ID', sortable: true, defaultWidth: 200 },
     { key: 'statement_id', label: 'Statement ID', sortable: true, defaultWidth: 200 },
-    { key: 'created_at', label: 'Created', sortable: true, defaultWidth: 150 }
+    { key: 'created_at', label: 'Created', sortable: true, defaultWidth: 150 },
+    { key: 'actions', label: 'Actions', sortable: false, defaultWidth: 100 }
   ]
   
   // Add selected columns
@@ -110,6 +113,9 @@ const tableData = computed(() => {
         row[colKey] = '-'
       }
     })
+    
+    // Add actions column
+    row.actions = transaction.id
     
     return row
   })
@@ -233,6 +239,75 @@ function refreshData() {
   loadTransactions()
 }
 
+async function showTransactionJson(transactionId) {
+  try {
+    loading.value = true
+    const transaction = await transactionsStore.fetchTransaction(transactionId)
+    selectedTransactionJson.value = transaction
+    showJsonModal.value = true
+  } catch (err) {
+    error('Failed to load transaction details')
+    console.error('Transaction load error:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+function closeJsonModal() {
+  showJsonModal.value = false
+  selectedTransactionJson.value = null
+}
+
+async function refreshTransactions() {
+  loading.value = true
+  try {
+    await loadTransactions()
+    success('Transactions refreshed successfully')
+  } catch (err) {
+    error('Failed to refresh transactions')
+    console.error('Refresh error:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function removeAllTransactions() {
+  if (!confirm('Are you sure you want to remove ALL transactions? This action cannot be undone.')) {
+    return
+  }
+  
+  if (!confirm('This will permanently delete all transaction data. Are you absolutely sure?')) {
+    return
+  }
+  
+  loading.value = true
+  try {
+    const response = await fetch('/api/transactions/', {
+      method: 'DELETE'
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove transactions')
+    }
+    
+    const result = await response.json()
+    success(`Successfully removed ${result.removed_count || 'all'} transactions`)
+    
+    // Clear local data
+    filteredTransactions.value = []
+    totalCount.value = 0
+    
+    // Refresh metadata to update column information
+    await loadMetadata()
+    
+  } catch (err) {
+    error('Failed to remove transactions')
+    console.error('Remove transactions error:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
 // Close dropdown when clicking outside
 function handleClickOutside(event) {
   const dropdown = event.target.closest('.dropdown-container')
@@ -299,6 +374,24 @@ onUnmounted(() => {
         >
           <RefreshCw :class="['h-4 w-4 mr-2', { 'animate-spin': metadataLoading }]" />
           Refresh Metadata
+        </Button>
+        <Button 
+          @click="refreshTransactions" 
+          :disabled="loading"
+          variant="outline"
+          size="sm"
+        >
+          <RefreshCw :class="['h-4 w-4 mr-2', { 'animate-spin': loading }]" />
+          Refresh
+        </Button>
+        <Button 
+          @click="removeAllTransactions" 
+          :disabled="loading || totalCount === 0"
+          variant="destructive"
+          size="sm"
+        >
+          <Settings class="h-4 w-4 mr-2" />
+          Remove All Transactions
         </Button>
         <Button 
           @click="showDebugInfo = !showDebugInfo"
@@ -428,6 +521,9 @@ onUnmounted(() => {
               <SelectItem :value="50">50</SelectItem>
               <SelectItem :value="100">100</SelectItem>
               <SelectItem :value="200">200</SelectItem>
+              <SelectItem :value="500">500</SelectItem>
+              <SelectItem :value="1000">1000</SelectItem>
+              <SelectItem :value="2000">2000</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -495,7 +591,18 @@ onUnmounted(() => {
           :selectable="false"
           :resizable="true"
           :paginated="false"
-        />
+        >
+          <template #cell-actions="{ value, item }">
+            <Button 
+              @click="showTransactionJson(value)"
+              variant="outline"
+              size="sm"
+              class="h-8 px-2"
+            >
+              View JSON
+            </Button>
+          </template>
+        </DataTable>
       </div>
       <div v-else-if="!loading" class="text-center py-8 text-gray-500">
         <p>No transactions found for the selected columns.</p>
@@ -516,6 +623,45 @@ onUnmounted(() => {
         <Settings class="h-4 w-4 mr-2" />
         Select Columns
       </Button>
+    </div>
+
+    <!-- JSON Modal -->
+    <div v-if="showJsonModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Transaction JSON</h3>
+          <Button @click="closeJsonModal" variant="ghost" size="sm" class="h-8 w-8 p-0">
+            <span class="text-lg leading-none">&times;</span>
+          </Button>
+        </div>
+        
+        <!-- Content -->
+        <div class="flex-1 overflow-hidden">
+          <div class="h-full p-4">
+            <pre class="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-auto h-full whitespace-pre-wrap">{{ JSON.stringify(selectedTransactionJson, null, 2) }}</pre>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="text-sm text-gray-500 dark:text-gray-400">
+            Transaction ID: {{ selectedTransactionJson?.id }}
+          </div>
+          <div class="flex gap-2">
+            <Button @click="closeJsonModal" variant="outline" size="sm">
+              Close
+            </Button>
+            <Button 
+              @click="navigator.clipboard.writeText(JSON.stringify(selectedTransactionJson, null, 2))"
+              variant="default"
+              size="sm"
+            >
+              Copy JSON
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

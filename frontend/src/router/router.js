@@ -23,12 +23,6 @@ export const navigationItems = [
     component: () => import('@/views/Transactions.vue')
   },
   {
-    name: "Testing",
-    path: "/testing",
-    icon: "TestTube",
-    component: Testing
-  },
-  {
     name: "Computed Field Rules",
     path: "/rules",
     icon: "FileCog",
@@ -39,7 +33,13 @@ export const navigationItems = [
     path: "/settings", 
     icon: "Settings",
     component: Settings
-  }
+  },
+  {
+    name: "Testing",
+    path: "/testing",
+    icon: "TestTube",
+    component: Testing
+  },
 ]
 
 // Generate routes from navigation items

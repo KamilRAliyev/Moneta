@@ -82,6 +82,7 @@ class RuleExecuteRequest(BaseModel):
     target_fields: Optional[List[str]] = Field(None, description="Only process rules for these fields")
     rule_ids: Optional[List[str]] = Field(None, description="Only execute these specific rules")
     dry_run: bool = Field(False, description="If true, don't save results, just return what would be computed")
+    force_reprocess: bool = Field(False, description="If true, reprocess all fields even if they already have values")
 
 
 class RuleExecuteResponse(BaseModel):
@@ -483,25 +484,41 @@ async def execute_rules(
                     rules=rules,
                     transaction_data=transaction_data,
                     ingested_fields=ingested_fields,
-                    computed_fields=computed_fields
+                    computed_fields=computed_fields,
+                    force_reprocess=request.force_reprocess
                 )
                 
                 if computed_results:
+                    print(f"DEBUG: Transaction {transaction.id} has computed results: {computed_results}")
                     # Track updated fields
                     for field_name in computed_results.keys():
                         updated_fields[field_name] = updated_fields.get(field_name, 0) + 1
                     
+                    # Serialize datetime objects to ISO format strings for JSON storage
+                    serialized_results = {}
+                    for key, value in computed_results.items():
+                        if isinstance(value, datetime):
+                            serialized_results[key] = value.isoformat()
+                        else:
+                            serialized_results[key] = value
+                    print(f"DEBUG: Serialized results: {serialized_results}")
+                    
                     if request.dry_run:
                         # Store dry run results
-                        dry_run_results[transaction.id] = computed_results
+                        dry_run_results[transaction.id] = serialized_results
                     else:
                         # Update transaction with computed results
+                        # Create a new dict to ensure SQLAlchemy detects the change
                         if transaction.computed_content:
-                            transaction.computed_content.update(computed_results)
+                            new_computed_content = dict(transaction.computed_content)
+                            new_computed_content.update(serialized_results)
+                            transaction.computed_content = new_computed_content
                         else:
-                            transaction.computed_content = computed_results
+                            transaction.computed_content = serialized_results
                         
                         transaction.computed_at = datetime.utcnow()
+                        # Force flush to ensure changes are written to database
+                        main_db.flush()
                         # You might want to update computed_content_hash here too
                 
                 processed_count += 1
@@ -512,7 +529,14 @@ async def execute_rules(
         
         # 5. Commit changes if not dry run
         if not request.dry_run and processed_count > 0:
-            main_db.commit()
+            print(f"DEBUG: About to commit {processed_count} transactions")
+            try:
+                main_db.commit()
+                print(f"DEBUG: Commit successful")
+            except Exception as e:
+                print(f"DEBUG: Commit failed: {e}")
+                errors.append(f"Database commit failed: {str(e)}")
+                main_db.rollback()
         
         return RuleExecuteResponse(
             success=len(errors) == 0,
@@ -523,6 +547,38 @@ async def execute_rules(
         )
         
     except Exception as e:
+        print(f"DEBUG: Exception caught: {e}")
         if not request.dry_run:
             main_db.rollback()
         raise HTTPException(status_code=500, detail=f"Error executing rules: {str(e)}")
+
+
+@router.post("/test-db-update")
+async def test_db_update(main_db: Session = Depends(lambda: get_db("main"))):
+    """Test endpoint to verify database updates work"""
+    try:
+        # Get a transaction
+        transaction = main_db.query(Transaction).first()
+        if not transaction:
+            return {"error": "No transactions found"}
+        
+        # Update computed_content
+        if transaction.computed_content:
+            transaction.computed_content["test_field"] = "test_value"
+        else:
+            transaction.computed_content = {"test_field": "test_value"}
+        
+        # Commit
+        main_db.commit()
+        
+        # Verify update
+        main_db.refresh(transaction)
+        
+        return {
+            "success": True,
+            "transaction_id": transaction.id,
+            "computed_content": transaction.computed_content
+        }
+    except Exception as e:
+        main_db.rollback()
+        return {"error": str(e)}

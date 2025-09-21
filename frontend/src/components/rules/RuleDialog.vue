@@ -52,6 +52,7 @@
             {{ isEdit ? 'Update Rule' : 'Create Rule' }}
           </Button>
         </div>
+        
       </div>
     </Card>
 
@@ -112,9 +113,11 @@ export default {
     const isEdit = computed(() => !!localRule.value.id)
     
     const isValid = computed(() => {
-      return localRule.value.name?.trim() && 
-             localRule.value.target_field?.trim() && 
-             localRule.value.action?.trim()
+      const hasRequiredFields = localRule.value.name?.trim() && 
+                               localRule.value.target_field?.trim() && 
+                               localRule.value.action?.trim()
+      
+      return hasRequiredFields
     })
 
     // Methods

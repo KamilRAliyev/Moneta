@@ -75,9 +75,21 @@
           <Plus class="w-4 h-4 mr-2" />
           New Rule
         </Button>
+        <div class="flex items-center gap-2">
+          <Checkbox 
+            v-model="forceReprocess" 
+            id="force-reprocess"
+            :disabled="loading"
+          />
+          <Label for="force-reprocess" class="text-sm">Force Reprocess</Label>
+        </div>
         <Button @click="executeRules" :disabled="loading" variant="secondary">
           <Play class="w-4 h-4 mr-2" />
           Execute Rules
+        </Button>
+        <Button @click="showTransactionPreview = !showTransactionPreview" variant="outline">
+          <Eye class="w-4 h-4 mr-2" />
+          Preview Transactions
         </Button>
       </div>
     </div>
@@ -222,14 +234,118 @@
 
           <!-- Rule Editor Form -->
           <CardContent class="flex-1 overflow-y-auto">
-            <RuleEditor 
-              v-if="selectedRule"
-              :rule="selectedRule"
-              :transaction-fields="transactionFields"
-              :formula-commands="formulaCommands"
-              @update:rule="updateSelectedRule"
-              @test="testRule"
-            />
+            <div class="space-y-6">
+              <!-- Transaction Reference Section -->
+              <Card>
+                <CardHeader class="pb-3">
+                  <CardTitle class="text-base">Transaction Reference</CardTitle>
+                  <p class="text-sm text-muted-foreground">
+                    Select a transaction to reference while building your rule
+                  </p>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                  <div class="flex space-x-2">
+                    <div class="flex-1">
+                      <Input
+                        v-model="ruleTransactionSearchQuery"
+                        placeholder="Search transactions..."
+                        class="mb-2"
+                        @input="filterRuleTransactions"
+                      />
+                      <Select v-model="selectedRuleTransactionId" @update:model-value="loadSelectedRuleTransaction">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a transaction to reference..." />
+                        </SelectTrigger>
+                        <SelectContent class="max-h-60">
+                          <SelectItem 
+                            v-for="transaction in filteredRuleTransactions" 
+                            :key="transaction.id" 
+                            :value="transaction.id"
+                          >
+                            <div class="flex flex-col w-full">
+                              <div class="flex items-center justify-between">
+                                <span class="font-medium truncate">{{ getTransactionDisplayName(transaction) }}</span>
+                                <span class="text-xs text-muted-foreground ml-2">
+                                  {{ formatDate(transaction.created_at) }}
+                                </span>
+                              </div>
+                              <span class="text-xs text-muted-foreground truncate">
+                                {{ transaction.statement.filename }}
+                              </span>
+                              <div class="flex flex-wrap gap-1 mt-1">
+                                <Badge 
+                                  v-for="(value, key) in getTransactionPreview(transaction)" 
+                                  :key="key"
+                                  variant="outline"
+                                  class="text-xs"
+                                >
+                                  {{ key }}: {{ value }}
+                                </Badge>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      @click="loadRuleTransactions"
+                      :disabled="loadingRuleTransactions"
+                      variant="outline"
+                      size="sm"
+                    >
+                      <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loadingRuleTransactions }" />
+                    </Button>
+                  </div>
+                  
+                  <!-- Selected Transaction Preview -->
+                  <div v-if="selectedRuleTransaction" class="p-3 bg-muted/50 rounded-md">
+                    <div class="flex items-center justify-between mb-2">
+                      <h6 class="font-medium text-sm">Selected Transaction:</h6>
+                      <Button 
+                        @click="copyToClipboard(JSON.stringify(selectedRuleTransaction, null, 2))"
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Copy class="w-4 h-4 mr-1" />
+                        Copy JSON
+                      </Button>
+                    </div>
+                    <div class="text-xs text-muted-foreground mb-2">
+                      <div><strong>ID:</strong> {{ selectedRuleTransaction.id }}</div>
+                      <div><strong>Statement:</strong> {{ selectedRuleTransaction.statement.filename }}</div>
+                      <div><strong>Created:</strong> {{ formatDate(selectedRuleTransaction.created_at) }}</div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                      <div>
+                        <h6 class="font-medium text-xs text-muted-foreground mb-1">Ingested Content:</h6>
+                        <div class="bg-background p-2 rounded font-mono text-xs max-h-32 overflow-y-auto border">
+                          <pre>{{ JSON.stringify(selectedRuleTransaction.ingested_content, null, 2) }}</pre>
+                        </div>
+                      </div>
+                      <div v-if="selectedRuleTransaction.computed_content">
+                        <h6 class="font-medium text-xs text-muted-foreground mb-1">Computed Content:</h6>
+                        <div class="bg-background p-2 rounded font-mono text-xs max-h-32 overflow-y-auto border">
+                          <pre>{{ JSON.stringify(selectedRuleTransaction.computed_content, null, 2) }}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <!-- Rule Editor -->
+              <RuleEditor 
+                v-if="selectedRule"
+                :key="selectedRule.id"
+                :rule="selectedRule"
+                :transaction-fields="transactionFields"
+                :formula-commands="formulaCommands"
+                :reference-transaction="selectedRuleTransaction"
+                @update:rule="updateSelectedRule"
+                @test="testRule"
+              />
+            </div>
           </CardContent>
         </div>
       </Card>
@@ -252,6 +368,101 @@
       :transaction-fields="transactionFields"
       @close="closeTestDialog"
     />
+
+    <!-- Transaction Preview Panel -->
+    <div v-if="showTransactionPreview" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <Card class="max-w-6xl w-full max-h-[90vh] overflow-hidden">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle class="text-xl">Transaction Preview</CardTitle>
+          <Button @click="showTransactionPreview = false" variant="ghost" size="icon">
+            <X class="w-4 h-4" />
+          </Button>
+        </CardHeader>
+        
+        <CardContent class="overflow-y-auto max-h-[calc(90vh-200px)]">
+          <div v-if="loadingTransactions" class="flex items-center justify-center py-8">
+            <div class="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
+            <span class="ml-3 text-muted-foreground">Loading transactions...</span>
+          </div>
+          
+          <div v-else-if="previewTransactions.length === 0" class="text-center py-8 text-muted-foreground">
+            <FileX class="w-8 h-8 mx-auto mb-2 opacity-50" />
+            No transactions found
+          </div>
+          
+          <div v-else class="space-y-4">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-muted-foreground">
+                Showing {{ previewTransactions.length }} transactions
+              </p>
+              <Button @click="loadPreviewTransactions" variant="outline" size="sm">
+                <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loadingTransactions }" />
+                Refresh
+              </Button>
+            </div>
+            
+            <div class="grid gap-4">
+              <div 
+                v-for="transaction in previewTransactions" 
+                :key="transaction.id"
+                class="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex-1">
+                    <h4 class="font-medium">{{ getTransactionDisplayName(transaction) }}</h4>
+                    <p class="text-sm text-muted-foreground">
+                      {{ transaction.statement.filename }} • {{ formatDate(transaction.created_at) }}
+                    </p>
+                  </div>
+                  <Button 
+                    @click="testWithTransaction(transaction)"
+                    variant="outline"
+                    size="sm"
+                  >
+                    <TestTube class="w-4 h-4 mr-1" />
+                    Test Rule
+                  </Button>
+                </div>
+                
+                <div class="space-y-4 text-sm">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <h5 class="font-medium text-muted-foreground">Complete Transaction Data</h5>
+                      <Button 
+                        @click="copyToClipboard(JSON.stringify(transaction, null, 2))"
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Copy class="w-4 h-4 mr-1" />
+                        Copy JSON
+                      </Button>
+                    </div>
+                    <div class="bg-muted/50 p-3 rounded font-mono text-xs max-h-96 overflow-y-auto">
+                      <pre>{{ JSON.stringify(transaction, null, 2) }}</pre>
+                    </div>
+                  </div>
+                  
+                  <div class="grid grid-cols-2 gap-4">
+                    <div>
+                      <h5 class="font-medium text-muted-foreground mb-2">Ingested Content</h5>
+                      <div class="bg-muted/50 p-2 rounded font-mono text-xs max-h-48 overflow-y-auto">
+                        <pre>{{ JSON.stringify(transaction.ingested_content, null, 2) }}</pre>
+                      </div>
+                    </div>
+                    <div>
+                      <h5 class="font-medium text-muted-foreground mb-2">Computed Content</h5>
+                      <div class="bg-muted/50 p-2 rounded font-mono text-xs max-h-48 overflow-y-auto">
+                        <pre>{{ JSON.stringify(transaction.computed_content, null, 2) }}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   </div>
 </template>
 
@@ -260,14 +471,17 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAlert } from '@/composables/useAlert'
 import RuleEditor from '@/components/rules/RuleEditor.vue'
 import RuleDialog from '@/components/rules/RuleDialog.vue'
 import RuleTestDialog from '@/components/rules/RuleTestDialog.vue'
 
 // Icons
-import { Plus, Play, Edit, Trash2, Settings, FileX, TestTube, Save, GripVertical, X } from 'lucide-vue-next'
+import { Plus, Play, Edit, Trash2, Settings, FileX, TestTube, Save, GripVertical, X, Eye, RefreshCw, Copy } from 'lucide-vue-next'
 
 export default {
   name: 'ComputedFieldRules',
@@ -278,7 +492,14 @@ export default {
     CardContent,
     CardHeader,
     CardTitle,
+    Checkbox,
     Input,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     RuleEditor,
     RuleDialog,
     RuleTestDialog,
@@ -291,7 +512,10 @@ export default {
     TestTube,
     Save,
     GripVertical,
-    X
+    X,
+    Eye,
+    RefreshCw,
+    Copy
   },
   setup() {
     const { showAlert } = useAlert()
@@ -300,6 +524,8 @@ export default {
     const loading = ref(false)
     const rules = ref([])
     const selectedRule = ref(null)
+    const forceReprocess = ref(false)
+    
     const selectedTargetField = ref('all')
     const targetFieldInput = ref('All Target Fields')
     const showTargetFieldDropdown = ref(false)
@@ -313,6 +539,19 @@ export default {
     const dialogRule = ref(null)
     const showTestDialog = ref(false)
     const testDialogRule = ref(null)
+    
+    // Transaction preview state
+    const showTransactionPreview = ref(false)
+    const previewTransactions = ref([])
+    const loadingTransactions = ref(false)
+    
+    // Rule transaction reference state
+    const ruleTransactions = ref([])
+    const filteredRuleTransactions = ref([])
+    const selectedRuleTransactionId = ref('')
+    const selectedRuleTransaction = ref(null)
+    const ruleTransactionSearchQuery = ref('')
+    const loadingRuleTransactions = ref(false)
 
     // Computed
     const filteredRules = computed(() => {
@@ -421,9 +660,21 @@ export default {
         const response = await fetch('/api/formulas/fields')
         if (!response.ok) throw new Error('Failed to load transaction fields')
         const data = await response.json()
-        transactionFields.value = [...data.ingested_fields, ...data.computed_fields]
+        
+        // Store both ingested and computed fields separately for better organization
+        transactionFields.value = {
+          ingested: data.ingested_fields || [],
+          computed: data.computed_fields || [],
+          all: [...(data.ingested_fields || []), ...(data.computed_fields || [])]
+        }
       } catch (error) {
         console.error('Error loading transaction fields:', error)
+        // Fallback to empty structure
+        transactionFields.value = {
+          ingested: [],
+          computed: [],
+          all: []
+        }
       }
     }
 
@@ -445,6 +696,11 @@ export default {
       }
       selectedRule.value = { ...rule }
       hasUnsavedChanges.value = false
+      
+      // Load transactions for rule reference
+      if (ruleTransactions.value.length === 0) {
+        loadRuleTransactions()
+      }
     }
 
     const reorderRules = async (oldIndex, newIndex) => {
@@ -626,15 +882,21 @@ export default {
         }
         
         const savedRule = await response.json()
+        
+        // Update the rule in the rules list
         const index = rules.value.findIndex(r => r.id === savedRule.id)
-        if (index !== -1) rules.value[index] = savedRule
+        if (index !== -1) {
+          rules.value[index] = savedRule
+        }
+        
+        // Update the selected rule
         selectedRule.value = { ...savedRule }
         hasUnsavedChanges.value = false
         
-        showAlert('Rule saved successfully', 'success')
+        showAlert('✅ Rule saved successfully', 'success')
         
       } catch (error) {
-        showAlert('Error saving rule: ' + error.message, 'error')
+        showAlert('❌ Error saving rule: ' + error.message, 'error')
       }
     }
 
@@ -645,11 +907,14 @@ export default {
       
       try {
         loading.value = true
+        showAlert('Executing rules... This may take a few seconds.', 'info', { duration: 3000 })
+        
         const requestBody = {
-          dry_run: false
+          dry_run: false,
+          force_reprocess: forceReprocess.value
         }
         
-        if (selectedTargetField.value) {
+        if (selectedTargetField.value && selectedTargetField.value !== 'all') {
           requestBody.target_fields = [selectedTargetField.value]
         }
         
@@ -664,14 +929,24 @@ export default {
         const result = await response.json()
         
         if (result.success) {
-          const message = `Rules executed successfully!\nProcessed ${result.processed_transactions} transactions\nUpdated fields: ${Object.keys(result.updated_fields).join(', ')}`
-          showAlert(message, 'success')
+          const processedCount = result.processed_transactions || 0
+          const updatedFields = Object.keys(result.updated_fields || {})
+          const updatedCount = Object.values(result.updated_fields || {}).reduce((sum, count) => sum + count, 0)
+          
+          const message = `✅ Rule execution completed!\n\n📊 Results:\n• Processed: ${processedCount} transactions\n• Updated: ${updatedCount} field values\n• Fields affected: ${updatedFields.length > 0 ? updatedFields.join(', ') : 'None'}`
+          showAlert(message, 'success', { duration: 8000 })
+          
+          // Reload rules to show updated data
+          await loadRules()
         } else {
-          showAlert(`Rule execution completed with errors:\n${result.errors.join('\n')}`, 'warning')
+          const errorMessage = result.errors && result.errors.length > 0 
+            ? result.errors.join('\n')
+            : 'Unknown error occurred during rule execution'
+          showAlert(`⚠️ Rule execution completed with errors:\n\n${errorMessage}`, 'warning', { duration: 10000 })
         }
         
       } catch (error) {
-        showAlert('Error executing rules: ' + error.message, 'error')
+        showAlert(`❌ Error executing rules: ${error.message}`, 'error', { duration: 8000 })
       } finally {
         loading.value = false
       }
@@ -701,6 +976,33 @@ export default {
       return text.substring(0, maxLength) + '...'
     }
 
+    const getTransactionPreview = (transaction) => {
+      if (!transaction) return {}
+      
+      const preview = {}
+      
+      // Add some key fields from ingested_content
+      if (transaction.ingested_content) {
+        const ingested = transaction.ingested_content
+        if (ingested.amount) preview.amount = ingested.amount
+        if (ingested.description) preview.description = ingested.description
+        if (ingested.date) preview.date = ingested.date
+        if (ingested.type) preview.type = ingested.type
+      }
+      
+      // Add some key fields from computed_content
+      if (transaction.computed_content) {
+        const computed = transaction.computed_content
+        Object.keys(computed).forEach(key => {
+          if (computed[key] !== null && computed[key] !== undefined) {
+            preview[key] = computed[key]
+          }
+        })
+      }
+      
+      return preview
+    }
+
     // Lifecycle
     onMounted(() => {
       loadRules()
@@ -720,6 +1022,106 @@ export default {
     const beforeUnload = (e) => {
       e.preventDefault()
       e.returnValue = ''
+    }
+
+    // Transaction preview methods
+    const loadPreviewTransactions = async () => {
+      try {
+        loadingTransactions.value = true
+        const response = await fetch('/api/transactions/?limit=20')
+        if (!response.ok) throw new Error('Failed to load transactions')
+        const data = await response.json()
+        previewTransactions.value = data.transactions
+      } catch (error) {
+        showAlert('Error loading transactions: ' + error.message, 'error')
+      } finally {
+        loadingTransactions.value = false
+      }
+    }
+
+    const testWithTransaction = (transaction) => {
+      if (!selectedRule.value) {
+        showAlert('Please select a rule first', 'warning')
+        return
+      }
+      
+      // Set the transaction data in the test dialog
+      testDialogRule.value = selectedRule.value
+      showTestDialog.value = true
+      
+      // The test dialog will handle loading the transaction data
+    }
+
+    const getTransactionDisplayName = (transaction) => {
+      const content = transaction.ingested_content || {}
+      const merchant = content.merchant || content.description || 'Unknown'
+      const amount = content.amount || ''
+      return `${merchant} ${amount ? `(${amount})` : ''}`.trim()
+    }
+
+    const formatDate = (dateString) => {
+      return new Date(dateString).toLocaleDateString()
+    }
+
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        showAlert('JSON copied to clipboard', 'success', { duration: 2000 })
+      } catch (error) {
+        showAlert('Failed to copy to clipboard', 'error')
+      }
+    }
+
+    // Rule transaction reference methods
+    const loadRuleTransactions = async () => {
+      try {
+        loadingRuleTransactions.value = true
+        const response = await fetch('/api/transactions/?limit=50')
+        if (!response.ok) throw new Error('Failed to load transactions')
+        const data = await response.json()
+        ruleTransactions.value = data.transactions
+        filteredRuleTransactions.value = data.transactions
+      } catch (error) {
+        showAlert('Error loading transactions: ' + error.message, 'error')
+      } finally {
+        loadingRuleTransactions.value = false
+      }
+    }
+
+    const filterRuleTransactions = () => {
+      if (!ruleTransactionSearchQuery.value.trim()) {
+        filteredRuleTransactions.value = ruleTransactions.value
+        return
+      }
+      
+      const query = ruleTransactionSearchQuery.value.toLowerCase()
+      filteredRuleTransactions.value = ruleTransactions.value.filter(transaction => {
+        const content = transaction.ingested_content || {}
+        const searchableText = [
+          content.merchant || '',
+          content.description || '',
+          content.amount || '',
+          transaction.statement.filename || ''
+        ].join(' ').toLowerCase()
+        
+        return searchableText.includes(query)
+      })
+    }
+
+    const loadSelectedRuleTransaction = async (transactionId) => {
+      if (!transactionId) {
+        selectedRuleTransaction.value = null
+        return
+      }
+      
+      try {
+        const response = await fetch(`/api/transactions/${transactionId}`)
+        if (!response.ok) throw new Error('Failed to load transaction')
+        const transaction = await response.json()
+        selectedRuleTransaction.value = transaction
+      } catch (error) {
+        showAlert('Error loading transaction: ' + error.message, 'error')
+      }
     }
 
     return {
@@ -761,7 +1163,26 @@ export default {
       selectTargetField,
       handleTargetFieldInput,
       handleTargetFieldBlur,
-      clearTargetField
+      clearTargetField,
+      showTransactionPreview,
+      previewTransactions,
+      loadingTransactions,
+      loadPreviewTransactions,
+      testWithTransaction,
+      getTransactionDisplayName,
+      formatDate,
+      copyToClipboard,
+      ruleTransactions,
+      filteredRuleTransactions,
+      selectedRuleTransactionId,
+      selectedRuleTransaction,
+      ruleTransactionSearchQuery,
+      loadingRuleTransactions,
+      loadRuleTransactions,
+      filterRuleTransactions,
+      loadSelectedRuleTransaction,
+      getTransactionPreview,
+      forceReprocess
     }
   }
 }

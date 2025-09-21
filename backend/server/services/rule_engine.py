@@ -8,10 +8,14 @@ Supports formula expressions, model mappings, and value assignments.
 import re
 import ast
 import operator
+import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 from server.services.formula_commands import command_registry, CommandResult
 from server.models.configurations import ComputedFieldRule
@@ -303,7 +307,10 @@ class RuleEngine:
         Returns:
             Rule evaluation result
         """
+        logger.debug(f"Starting evaluation of rule '{rule.name}' (ID: {rule.id})")
+        
         if not rule.active:
+            logger.debug(f"Rule is not active, skipping")
             return RuleEvaluationResult(
                 success=False,
                 condition_matched=False,
@@ -314,7 +321,9 @@ class RuleEngine:
         evaluator = SafeExpressionEvaluator(context)
         
         # Evaluate condition
+        logger.debug(f"Evaluating condition: '{rule.condition}'")
         condition_matched, condition_error = evaluator.evaluate_condition(rule.condition)
+        logger.debug(f"Condition result: {condition_matched} (error: {condition_error})")
         
         if condition_error:
             return RuleEvaluationResult(
@@ -325,6 +334,7 @@ class RuleEngine:
             )
         
         if not condition_matched:
+            logger.debug(f"Condition not matched, skipping action evaluation")
             return RuleEvaluationResult(
                 success=True,
                 condition_matched=False,
@@ -332,7 +342,9 @@ class RuleEngine:
             )
         
         # Condition matched, evaluate action
+        logger.debug(f"Condition matched, evaluating action: '{rule.action}' (type: {rule.rule_type})")
         computed_value, action_error = evaluator.evaluate_action(rule.action, rule.rule_type)
+        logger.debug(f"Action result: {computed_value} (error: {action_error})")
         
         if action_error:
             return RuleEvaluationResult(
@@ -354,7 +366,8 @@ class RuleEngine:
         rules: List[ComputedFieldRule],
         transaction_data: Dict[str, Any],
         ingested_fields: List[str],
-        computed_fields: List[str]
+        computed_fields: List[str],
+        force_reprocess: bool = False
     ) -> Dict[str, Any]:
         """
         Execute rules for a single transaction
@@ -364,10 +377,14 @@ class RuleEngine:
             transaction_data: Combined ingested_content + computed_content
             ingested_fields: Available ingested field names
             computed_fields: Available computed field names
+            force_reprocess: If True, reprocess all fields even if already computed
             
         Returns:
             Dictionary of computed field values
         """
+        logger.info(f"Starting execution for {len(rules)} rules (force_reprocess={force_reprocess})")
+        logger.info(f"Transaction data keys: {list(transaction_data.keys())}")
+        
         context = RuleExecutionContext(
             transaction_data=transaction_data,
             ingested_fields=ingested_fields,
@@ -378,21 +395,97 @@ class RuleEngine:
         computed_results = {}
         processed_targets = set()  # Track which target fields have been computed
         
+        logger.info(f"Available commands: {[cmd.name for cmd in command_registry.list_commands()]}")
+        
         # Process rules in priority order (already sorted)
-        for rule in rules:
+        for i, rule in enumerate(rules):
+            logger.info(f"Processing rule {i+1}/{len(rules)}: {rule.name} (ID: {rule.id})")
+            logger.debug(f"  Target field: {rule.target_field}")
+            logger.debug(f"  Condition: {rule.condition}")
+            logger.debug(f"  Action: {rule.action}")
+            logger.debug(f"  Priority: {rule.priority}")
+            logger.debug(f"  Active: {rule.active}")
             # Skip if we've already computed this target field (first successful rule wins)
+            # BUT allow reprocessing if current value is None, empty, or we want to force reprocessing
+            # OR if this is a different rule targeting the same field (rule chaining)
             if rule.target_field in processed_targets:
-                continue
+                current_value = context.transaction_data.get(rule.target_field)
+                last_rule_id = context.transaction_data.get(f"_{rule.target_field}_last_rule_id")
+                
+                logger.debug(f"  Field {rule.target_field} already processed by rule {last_rule_id}")
+                logger.debug(f"  Current value: {current_value} (type: {type(current_value)})")
+                logger.debug(f"  Force reprocess: {force_reprocess}")
+                
+                # Allow reprocessing if value is None, empty string, or empty dict
+                if current_value is not None and current_value != "" and current_value != {}:
+                    # Check if this is a different rule - if so, allow chaining
+                    if last_rule_id == rule.id:
+                        logger.debug(f"  SKIPPING - Same rule already processed this field")
+                        continue  # Same rule, skip
+                    
+                    # Different rule targeting same field - check if we should allow chaining
+                    # For fallback patterns, we need to be more careful about when to allow chaining
+                    # The current approach is too permissive - it allows any rule to overwrite if its condition matches
+                    # This breaks fallback patterns where Rule 2 should only execute if Rule 1 didn't
+                    
+                    # For now, let's be conservative and only allow chaining if the current value is None/empty
+                    # This preserves the "first successful rule wins" behavior for most cases
+                    # while still allowing fallback patterns to work
+                    # UNLESS force_reprocess is True, which should allow all rules to execute
+                    if not force_reprocess:
+                        logger.debug(f"  SKIPPING - Field already has value from rule {last_rule_id} (first successful rule wins)")
+                        continue
+                    else:
+                        logger.info(f"  ALLOWING - Force reprocess enabled, allowing rule to overwrite field")
+                        # Remove from processed_targets so it can be reprocessed
+                        processed_targets.discard(rule.target_field)
+                        logger.debug(f"  Removed {rule.target_field} from processed targets for reprocessing")
+                else:
+                    # Field exists but has no meaningful value (None, empty string, empty dict)
+                    # Allow this rule to execute
+                    logger.debug(f"  ALLOWING - Current value is empty/None, allowing rule to execute")
+            else:
+                logger.debug(f"  Field {rule.target_field} not yet processed, allowing rule to execute")
             
+            logger.debug(f"  Evaluating rule...")
             result = self.evaluate_rule(rule, context)
+            
+            logger.debug(f"  Evaluation result:")
+            logger.debug(f"    Success: {result.success}")
+            logger.debug(f"    Condition matched: {result.condition_matched}")
+            logger.debug(f"    Computed value: {result.computed_value} (type: {type(result.computed_value)})")
+            if result.error:
+                logger.error(f"    Error: {result.error}")
             
             if result.success and result.condition_matched:
                 # Rule matched and executed successfully
+                logger.info(f"  ✅ RULE EXECUTED SUCCESSFULLY")
+                logger.info(f"  Setting {rule.target_field} = {result.computed_value}")
+                
                 computed_results[rule.target_field] = result.computed_value
                 processed_targets.add(rule.target_field)
                 
                 # Update context with newly computed value for subsequent rules
                 context.transaction_data[rule.target_field] = result.computed_value
+                
+                # Track which rule last processed this field (for chaining detection)
+                context.transaction_data[f"_{rule.target_field}_last_rule_id"] = rule.id
+                
+                logger.debug(f"  Updated context with new value")
+                logger.debug(f"  Processed targets: {processed_targets}")
+            else:
+                logger.debug(f"  ❌ RULE NOT EXECUTED")
+                if not result.success:
+                    logger.debug(f"    Reason: Rule evaluation failed - {result.error}")
+                elif not result.condition_matched:
+                    logger.debug(f"    Reason: Condition not met")
+                else:
+                    logger.debug(f"    Reason: Unknown")
+        
+        logger.info(f"Execution completed!")
+        logger.info(f"Final computed results: {computed_results}")
+        logger.debug(f"Processed targets: {processed_targets}")
+        logger.debug(f"Final transaction data: {context.transaction_data}")
         
         return computed_results
 

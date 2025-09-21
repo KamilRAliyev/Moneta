@@ -9,6 +9,7 @@
           type="text"
           placeholder="Enter rule name..."
           class="mt-1"
+          @input="handleInputChange"
         />
       </div>
       
@@ -19,6 +20,7 @@
           type="text"
           placeholder="Enter target field name..."
           class="mt-1"
+          @input="handleTargetFieldChange"
         />
       </div>
     </div>
@@ -47,6 +49,7 @@
           min="0"
           placeholder="100"
           class="mt-1"
+          @input="handleInputChange"
         />
         <p class="text-xs text-muted-foreground mt-1">Lower = higher priority</p>
       </div>
@@ -73,6 +76,7 @@
         rows="2"
         placeholder="Describe what this rule does..."
         class="mt-1"
+        @input="handleInputChange"
       />
     </div>
 
@@ -88,6 +92,7 @@
           rows="3"
           placeholder="e.g., merchant == 'Amazon' or amount > 100"
           class="font-mono text-sm pr-10"
+          @input="handleInputChange"
         />
         <div class="absolute top-2 right-2">
           <Button 
@@ -109,28 +114,74 @@
           <li><code>merchant == 'Amazon'</code> - Exact match</li>
           <li><code>amount > 100</code> - Numeric comparison</li>
           <li><code>description.contains('salary')</code> - Text contains</li>
+          <li><code>amount_to_float(amount) > 100</code> - Using formula commands</li>
+          <li><code>date_infer(date) > '2024-01-01'</code> - Date parsing</li>
           <li><code>merchant == 'Amazon' and amount > 50</code> - Multiple conditions</li>
         </ul>
         <p class="text-blue-600 mt-2">
           <strong>Available fields:</strong> 
-          <span class="font-mono">{{ transactionFields.map(f => f.name).join(', ') }}</span>
+          <span class="font-mono">{{ getAllFieldNames().join(', ') }}</span>
         </p>
       </div>
       
       <!-- Field Suggestions -->
-      <div class="mt-2">
-        <div class="flex flex-wrap gap-1">
-          <span class="text-xs text-muted-foreground">Fields:</span>
-          <Button
-            v-for="field in transactionFields.slice(0, 8)"
-            :key="field.name"
-            @click="insertFieldInCondition(field.name)"
-            variant="outline"
-            size="sm"
-            class="h-6 text-xs"
-          >
-            {{ field.name }}
-          </Button>
+      <div class="mt-2 space-y-2">
+        <div v-if="transactionFields.ingested && transactionFields.ingested.length > 0">
+          <div class="flex flex-wrap gap-1">
+            <span class="text-xs text-muted-foreground">Ingested Fields:</span>
+            <Button
+              v-for="field in transactionFields.ingested"
+              :key="field.name"
+              @click="insertFieldInCondition(field.name)"
+              variant="outline"
+              size="sm"
+              class="h-6 text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+              :title="getFieldTooltip(field)"
+            >
+              {{ field.name }}
+            </Button>
+          </div>
+        </div>
+        
+        <div v-if="transactionFields.computed && transactionFields.computed.length > 0">
+          <div class="flex flex-wrap gap-1">
+            <span class="text-xs text-muted-foreground">Computed Fields:</span>
+            <Button
+              v-for="field in transactionFields.computed"
+              :key="field.name"
+              @click="insertFieldInCondition(field.name)"
+              variant="outline"
+              size="sm"
+              class="h-6 text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+              :title="getFieldTooltip(field)"
+            >
+              {{ field.name }}
+            </Button>
+          </div>
+        </div>
+        
+        <!-- Formula Commands for Conditions -->
+        <div v-if="formulaCommands && formulaCommands.length > 0">
+          <div class="flex flex-wrap gap-1">
+            <span class="text-xs text-muted-foreground">Commands:</span>
+            <Button
+              v-for="command in formulaCommands"
+              :key="command.name"
+              @click="insertCommandInCondition(command)"
+              variant="outline"
+              size="sm"
+              class="h-6 text-xs bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100"
+              :title="command.description"
+            >
+              {{ command.name }}
+            </Button>
+          </div>
+        </div>
+        
+        <div v-if="(!transactionFields.ingested || transactionFields.ingested.length === 0) && (!transactionFields.computed || transactionFields.computed.length === 0)">
+          <div class="text-xs text-muted-foreground">
+            No fields available. Upload and process some transactions first.
+          </div>
         </div>
       </div>
     </div>
@@ -149,6 +200,7 @@
           rows="4"
           placeholder="e.g., amount_to_float(amount) or date_infer(date)"
           class="font-mono text-sm"
+          @input="handleInputChange"
         />
         
         <!-- Formula Commands -->
@@ -156,12 +208,12 @@
           <div class="flex flex-wrap gap-1 mb-2">
             <span class="text-xs text-muted-foreground">Commands:</span>
             <Button
-              v-for="command in formulaCommands.slice(0, 10)"
+              v-for="command in formulaCommands"
               :key="command.name"
               @click="insertCommand(command)"
               variant="outline"
               size="sm"
-              class="h-6 text-xs"
+              class="h-6 text-xs bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100"
               :title="command.description"
             >
               {{ command.name }}
@@ -176,6 +228,7 @@
           rows="2"
           placeholder="e.g., Account('Cash') or Category('Food')"
           class="font-mono text-sm"
+          @input="handleInputChange"
         />
         <p class="text-sm text-muted-foreground">
           Create model objects like <code>Account('name')</code> or <code>Category('name')</code>
@@ -187,6 +240,7 @@
           v-model="localRule.action"
           type="text"
           placeholder="e.g., 'Fixed Value' or 123.45"
+          @input="handleInputChange"
         />
         <p class="text-sm text-muted-foreground">
           Enter a fixed value (text or number) to assign to the target field
@@ -212,19 +266,86 @@
       </div>
     </div>
 
+    <!-- Reference Transaction Fields -->
+    <div v-if="referenceTransaction" class="border-t pt-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-medium">Reference Transaction Fields</h3>
+        <Badge variant="outline" class="text-xs">
+          {{ referenceTransaction.statement.filename }}
+        </Badge>
+      </div>
+      <p class="text-sm text-muted-foreground mb-3">
+        Click on any field below to insert it into your condition or action.
+      </p>
+      
+      <div class="space-y-3">
+        <div>
+          <h4 class="text-xs font-medium text-muted-foreground mb-2">Ingested Fields:</h4>
+          <div class="flex flex-wrap gap-1">
+            <Button
+              v-for="(value, key) in referenceTransaction.ingested_content"
+              :key="`ingested-${key}`"
+              @click="insertFieldInCondition(key)"
+              variant="outline"
+              size="sm"
+              class="h-7 text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+              :title="`Value: ${value}`"
+            >
+              {{ key }}
+            </Button>
+          </div>
+        </div>
+        
+        <div v-if="referenceTransaction.computed_content && Object.keys(referenceTransaction.computed_content).length > 0">
+          <h4 class="text-xs font-medium text-muted-foreground mb-2">Computed Fields:</h4>
+          <div class="flex flex-wrap gap-1">
+            <Button
+              v-for="(value, key) in referenceTransaction.computed_content"
+              :key="`computed-${key}`"
+              @click="insertFieldInCondition(key)"
+              variant="outline"
+              size="sm"
+              class="h-7 text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+              :title="`Value: ${value}`"
+            >
+              {{ key }}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Quick Test -->
     <div class="border-t pt-6">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-medium">Quick Test</h3>
-        <Button 
-          @click="$emit('test')"
-          variant="outline"
-          size="sm"
-        >
-          <TestTube class="w-4 h-4 mr-1" />
-          Test This Rule
-        </Button>
-      </div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium">Quick Test</h3>
+          <div class="flex space-x-2">
+            <Button 
+              @click="clearRuleFields"
+              variant="outline"
+              size="sm"
+            >
+              Clear Fields
+            </Button>
+            <Button 
+              @click="$emit('test')"
+              variant="outline"
+              size="sm"
+            >
+              <TestTube class="w-4 h-4 mr-1" />
+              Test This Rule
+            </Button>
+            <Button 
+              @click="executeThisRule"
+              variant="default"
+              size="sm"
+              :disabled="loading"
+            >
+              <Play class="w-4 h-4 mr-1" />
+              {{ loading ? 'Executing...' : 'Execute This Rule' }}
+            </Button>
+          </div>
+        </div>
       <p class="text-sm text-muted-foreground">
         Test this rule against sample transaction data to verify it works as expected.
       </p>
@@ -233,14 +354,16 @@
 </template>
 
 <script>
-import { ref, watch, toRefs } from 'vue'
+import { ref, watch, toRefs, onMounted, onUnmounted } from 'vue'
+import { debounce } from 'lodash-es'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { HelpCircle, TestTube } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { HelpCircle, TestTube, Play } from 'lucide-vue-next'
 
 export default {
   name: 'RuleEditor',
@@ -255,6 +378,7 @@ export default {
     SelectTrigger,
     SelectValue,
     Checkbox,
+    Badge,
     HelpCircle,
     TestTube
   },
@@ -270,25 +394,52 @@ export default {
     formulaCommands: {
       type: Array,
       default: () => []
+    },
+    referenceTransaction: {
+      type: Object,
+      default: null
     }
   },
   emits: ['update:rule', 'test'],
   setup(props, { emit }) {
-    const { rule } = toRefs(props)
+    const { rule, referenceTransaction } = toRefs(props)
     
     // Local state
     const localRule = ref({ ...rule.value })
     const showConditionHelp = ref(false)
+    const loading = ref(false)
+
+    // Debounced functions to prevent recursive updates
+
+    const debouncedEmitUpdate = debounce(() => {
+      emit('update:rule', { ...localRule.value })
+    }, 100)
 
     // Watch for external rule changes
     watch(rule, (newRule) => {
-      localRule.value = { ...newRule }
+      if (newRule) {
+        localRule.value = { ...newRule }
+      }
+    }, { deep: true, immediate: true })
+
+    // Watch for local changes and emit updates (debounced)
+    watch(localRule, () => {
+      debouncedEmitUpdate()
     }, { deep: true })
 
-    // Watch for local changes and emit updates
-    watch(localRule, (newRule) => {
-      emit('update:rule', { ...newRule })
-    }, { deep: true })
+    // Cleanup debounced functions on unmount
+    onUnmounted(() => {
+      debouncedEmitUpdate.cancel()
+    })
+
+    // Handle input changes
+    const handleInputChange = () => {
+      debouncedEmitUpdate()
+    }
+
+    const handleTargetFieldChange = () => {
+      debouncedEmitUpdate()
+    }
 
     // Methods
     const insertFieldInCondition = (fieldName) => {
@@ -298,9 +449,20 @@ export default {
         const end = textarea.selectionEnd
         const text = localRule.value.condition || ''
         
-        localRule.value.condition = text.slice(0, start) + fieldName + text.slice(end)
+        // Check if field is already at cursor position to avoid duplicates
+        const beforeCursor = text.slice(0, start)
+        const afterCursor = text.slice(end)
         
-        // Focus and set cursor position
+        // If field is already at cursor position, don't add it again
+        if (beforeCursor.endsWith(fieldName) || afterCursor.startsWith(fieldName)) {
+          return
+        }
+        
+        // Insert field name at cursor position
+        const newText = beforeCursor + fieldName + afterCursor
+        localRule.value.condition = newText
+        
+        // Focus and set cursor position after the inserted text
         setTimeout(() => {
           textarea.focus()
           textarea.setSelectionRange(start + fieldName.length, start + fieldName.length)
@@ -313,16 +475,155 @@ export default {
         ? `${command.name}(${command.parameters.map(p => p.name).join(', ')})`
         : `${command.name}()`
       
-      localRule.value.action = localRule.value.action 
-        ? localRule.value.action + ' ' + placeholder
-        : placeholder
+      // Find the action textarea
+      const textarea = document.querySelector('textarea[placeholder*="amount_to_float"]')
+      if (textarea) {
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const text = localRule.value.action || ''
+        
+        // Check if command is already at cursor position to avoid duplicates
+        const beforeCursor = text.slice(0, start)
+        const afterCursor = text.slice(end)
+        
+        // If command is already at cursor position, don't add it again
+        if (beforeCursor.endsWith(placeholder) || afterCursor.startsWith(placeholder)) {
+          return
+        }
+        
+        // Insert command at cursor position
+        const newText = beforeCursor + placeholder + afterCursor
+        localRule.value.action = newText
+        
+        // Focus and set cursor position after the inserted text
+        setTimeout(() => {
+          textarea.focus()
+          textarea.setSelectionRange(start + placeholder.length, start + placeholder.length)
+        })
+      } else {
+        // Fallback to appending if textarea not found
+        localRule.value.action = localRule.value.action 
+          ? localRule.value.action + ' ' + placeholder
+          : placeholder
+      }
     }
+
+    const insertCommandInCondition = (command) => {
+      const placeholder = command.parameters && command.parameters.length > 0
+        ? `${command.name}(${command.parameters.map(p => p.name).join(', ')})`
+        : `${command.name}()`
+      
+      const textarea = document.querySelector('textarea[placeholder*="merchant"]')
+      if (textarea) {
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const text = localRule.value.condition || ''
+        
+        // Check if command is already at cursor position to avoid duplicates
+        const beforeCursor = text.slice(0, start)
+        const afterCursor = text.slice(end)
+        
+        // If command is already at cursor position, don't add it again
+        if (beforeCursor.endsWith(placeholder) || afterCursor.startsWith(placeholder)) {
+          return
+        }
+        
+        // Insert command at cursor position
+        const newText = beforeCursor + placeholder + afterCursor
+        localRule.value.condition = newText
+        
+        // Focus and set cursor position after the inserted text
+        setTimeout(() => {
+          textarea.focus()
+          textarea.setSelectionRange(start + placeholder.length, start + placeholder.length)
+        })
+      }
+    }
+
+    const getFieldTooltip = (field) => {
+      const parts = []
+      if (field.description) parts.push(field.description)
+      if (field.sample_values && field.sample_values.length > 0) {
+        parts.push(`Sample: ${field.sample_values.slice(0, 3).join(', ')}`)
+      }
+      return parts.join(' | ')
+    }
+
+    const getAllFieldNames = () => {
+      const ingested = transactionFields.value.ingested || []
+      const computed = transactionFields.value.computed || []
+      return [...ingested, ...computed].map(f => f.name)
+    }
+
+    const clearRuleFields = () => {
+      localRule.value.condition = ''
+      localRule.value.action = ''
+    }
+
+    const executeThisRule = async () => {
+      if (!localRule.value.id) {
+        alert('Please save the rule first before executing it.')
+        return
+      }
+
+      if (!confirm(`Execute rule "${localRule.value.name}" against all transactions? This will compute field values.`)) {
+        return
+      }
+
+      try {
+        loading.value = true
+        
+        const requestBody = {
+          dry_run: false,
+          target_fields: [localRule.value.target_field]
+        }
+        
+        const response = await fetch('/api/rules/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        })
+        
+        if (!response.ok) throw new Error('Failed to execute rule')
+        
+        const result = await response.json()
+        
+        if (result.success) {
+          const processedCount = result.processed_transactions || 0
+          const updatedFields = Object.keys(result.updated_fields || {})
+          const updatedCount = Object.values(result.updated_fields || {}).reduce((sum, count) => sum + count, 0)
+          
+          const message = `✅ Rule execution completed!\n\n📊 Results:\n• Processed: ${processedCount} transactions\n• Updated: ${updatedCount} field values\n• Fields affected: ${updatedFields.length > 0 ? updatedFields.join(', ') : 'None'}`
+          alert(message)
+        } else {
+          const errorMessage = result.errors && result.errors.length > 0 
+            ? result.errors.join('\n')
+            : 'Unknown error occurred during rule execution'
+          alert(`⚠️ Rule execution completed with errors:\n\n${errorMessage}`)
+        }
+        
+      } catch (error) {
+        alert(`❌ Error executing rule: ${error.message}`)
+      } finally {
+        loading.value = false
+      }
+    }
+
 
     return {
       localRule,
       showConditionHelp,
+      referenceTransaction,
+      loading,
       insertFieldInCondition,
-      insertCommand
+      insertCommand,
+      insertCommandInCondition,
+      getFieldTooltip,
+      getAllFieldNames,
+      clearRuleFields,
+      executeThisRule,
+      handleInputChange,
+      handleTargetFieldChange
     }
   }
 }

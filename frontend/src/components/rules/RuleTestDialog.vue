@@ -69,25 +69,48 @@
             <!-- Transaction Selector -->
             <div v-if="dataSource === 'transaction'" class="space-y-4">
               <div class="flex space-x-2">
-                <Select v-model="selectedTransactionId" @update:model-value="loadSelectedTransaction">
-                  <SelectTrigger class="flex-1">
-                    <SelectValue placeholder="Select a transaction to test against..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem 
-                      v-for="transaction in availableTransactions" 
-                      :key="transaction.id" 
-                      :value="transaction.id"
-                    >
-                      <div class="flex flex-col">
-                        <span class="font-medium">{{ getTransactionDisplayName(transaction) }}</span>
-                        <span class="text-xs text-muted-foreground">
-                          {{ transaction.statement.filename }} • {{ formatDate(transaction.created_at) }}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div class="flex-1">
+                  <Input
+                    v-model="transactionSearchQuery"
+                    placeholder="Search transactions..."
+                    class="mb-2"
+                    @input="filterTransactions"
+                  />
+                  <Select v-model="selectedTransactionId" @update:model-value="loadSelectedTransaction">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a transaction to test against..." />
+                    </SelectTrigger>
+                    <SelectContent class="max-h-60">
+                      <SelectItem 
+                        v-for="transaction in filteredTransactions" 
+                        :key="transaction.id" 
+                        :value="transaction.id"
+                      >
+                        <div class="flex flex-col w-full">
+                          <div class="flex items-center justify-between">
+                            <span class="font-medium truncate">{{ getTransactionDisplayName(transaction) }}</span>
+                            <span class="text-xs text-muted-foreground ml-2">
+                              {{ formatDate(transaction.created_at) }}
+                            </span>
+                          </div>
+                          <span class="text-xs text-muted-foreground truncate">
+                            {{ transaction.statement.filename }}
+                          </span>
+                          <div class="flex flex-wrap gap-1 mt-1">
+                            <Badge 
+                              v-for="(value, key) in getTransactionPreview(transaction)" 
+                              :key="key"
+                              variant="outline"
+                              class="text-xs"
+                            >
+                              {{ key }}: {{ value }}
+                            </Badge>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button 
                   @click="loadTransactions"
                   :disabled="loadingTransactions"
@@ -101,10 +124,27 @@
               <div v-if="selectedTransaction" class="p-3 bg-muted/50 rounded-md">
                 <div class="text-sm">
                   <div class="font-medium mb-2">Selected Transaction:</div>
-                  <div class="space-y-1 text-xs text-muted-foreground">
+                  <div class="space-y-1 text-xs text-muted-foreground mb-3">
                     <div><strong>ID:</strong> {{ selectedTransaction.id }}</div>
                     <div><strong>Statement:</strong> {{ selectedTransaction.statement.filename }}</div>
                     <div><strong>Created:</strong> {{ formatDate(selectedTransaction.created_at) }}</div>
+                  </div>
+                  
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <h6 class="font-medium text-muted-foreground">Complete Transaction JSON:</h6>
+                      <Button 
+                        @click="copyToClipboard(JSON.stringify(selectedTransaction, null, 2))"
+                        variant="outline"
+                        size="sm"
+                      >
+                        <Copy class="w-4 h-4 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
+                    <div class="bg-background p-2 rounded font-mono text-xs max-h-48 overflow-y-auto border">
+                      <pre>{{ JSON.stringify(selectedTransaction, null, 2) }}</pre>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -152,16 +192,43 @@
             <!-- Field Suggestions -->
             <div class="space-y-2">
               <Label class="text-xs text-muted-foreground">Available fields:</Label>
-              <div class="flex flex-wrap gap-1">
-                <Badge
-                  v-for="field in transactionFields.slice(0, 10)"
-                  :key="field.name"
-                  @click="insertField(field.name)"
-                  variant="outline"
-                  class="cursor-pointer hover:bg-accent text-xs"
-                >
-                  {{ field.name }}
-                </Badge>
+              
+              <div v-if="transactionFields.ingested && transactionFields.ingested.length > 0">
+                <div class="text-xs text-muted-foreground mb-1">Ingested Fields:</div>
+                <div class="flex flex-wrap gap-1">
+                  <Badge
+                    v-for="field in transactionFields.ingested"
+                    :key="field.name"
+                    @click="insertField(field.name)"
+                    variant="outline"
+                    class="cursor-pointer hover:bg-accent text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    :title="getFieldTooltip(field)"
+                  >
+                    {{ field.name }}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div v-if="transactionFields.computed && transactionFields.computed.length > 0">
+                <div class="text-xs text-muted-foreground mb-1">Computed Fields:</div>
+                <div class="flex flex-wrap gap-1">
+                  <Badge
+                    v-for="field in transactionFields.computed"
+                    :key="field.name"
+                    @click="insertField(field.name)"
+                    variant="outline"
+                    class="cursor-pointer hover:bg-accent text-xs bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    :title="getFieldTooltip(field)"
+                  >
+                    {{ field.name }}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div v-if="(!transactionFields.ingested || transactionFields.ingested.length === 0) && (!transactionFields.computed || transactionFields.computed.length === 0)">
+                <div class="text-xs text-muted-foreground">
+                  No fields available. Upload and process some transactions first.
+                </div>
               </div>
             </div>
 
@@ -267,12 +334,13 @@
 
 <script>
 import { ref, computed, toRefs, onMounted } from 'vue'
-import { X, TestTube, CheckCircle, AlertCircle, XCircle, RefreshCw } from 'lucide-vue-next'
+import { X, TestTube, CheckCircle, AlertCircle, XCircle, RefreshCw, Copy } from 'lucide-vue-next'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default {
@@ -284,6 +352,7 @@ export default {
     AlertCircle,
     XCircle,
     RefreshCw,
+    Copy,
     Card,
     CardContent,
     CardDescription,
@@ -294,6 +363,7 @@ export default {
     Badge,
     Label,
     Textarea,
+    Input,
     Select,
     SelectContent,
     SelectItem,
@@ -326,6 +396,8 @@ export default {
     const selectedTransactionId = ref('')
     const selectedTransaction = ref(null)
     const loadingTransactions = ref(false)
+    const transactionSearchQuery = ref('')
+    const filteredTransactions = ref([])
 
     // Computed
     const isValidJson = computed(() => {
@@ -346,30 +418,38 @@ export default {
       // Create sample data based on available fields
       const sampleData = {}
       
-      if (transactionFields.value.length > 0) {
+      const allFields = transactionFields.value.all || []
+      
+      if (allFields.length > 0) {
         // Add some common fields with sample values
-        transactionFields.value.slice(0, 8).forEach(field => {
-          switch (field.name.toLowerCase()) {
-            case 'merchant':
-              sampleData[field.name] = 'Amazon'
-              break
-            case 'amount':
-              sampleData[field.name] = '25.99'
-              break
-            case 'date':
-              sampleData[field.name] = '2024-01-15'
-              break
-            case 'description':
-              sampleData[field.name] = 'Online purchase'
-              break
-            case 'category':
-              sampleData[field.name] = 'Shopping'
-              break
-            case 'type':
-              sampleData[field.name] = 'debit'
-              break
-            default:
-              sampleData[field.name] = 'sample_value'
+        allFields.slice(0, 8).forEach(field => {
+          // Use sample values from metadata if available
+          if (field.sample_values && field.sample_values.length > 0) {
+            sampleData[field.name] = field.sample_values[0]
+          } else {
+            // Fallback to common field names
+            switch (field.name.toLowerCase()) {
+              case 'merchant':
+                sampleData[field.name] = 'Amazon'
+                break
+              case 'amount':
+                sampleData[field.name] = '25.99'
+                break
+              case 'date':
+                sampleData[field.name] = '2024-01-15'
+                break
+              case 'description':
+                sampleData[field.name] = 'Online purchase'
+                break
+              case 'category':
+                sampleData[field.name] = 'Shopping'
+                break
+              case 'type':
+                sampleData[field.name] = 'debit'
+                break
+              default:
+                sampleData[field.name] = 'sample_value'
+            }
           }
         })
       } else {
@@ -406,8 +486,11 @@ export default {
         // Try to insert the field appropriately
         try {
           const parsed = JSON.parse(text)
-          parsed[fieldName] = 'sample_value'
-          sampleDataJson.value = JSON.stringify(parsed, null, 2)
+          // Only add if field doesn't already exist
+          if (!(fieldName in parsed)) {
+            parsed[fieldName] = 'sample_value'
+            sampleDataJson.value = JSON.stringify(parsed, null, 2)
+          }
         } catch {
           // If JSON is invalid, just append the field
           sampleDataJson.value = text + `\n"${fieldName}": "sample_value",`
@@ -426,17 +509,30 @@ export default {
         
         const sampleData = JSON.parse(sampleDataJson.value)
         
+        // Ensure we have a complete rule object with all required fields
+        const completeRule = {
+          name: rule.value.name || 'Test Rule',
+          description: rule.value.description || '',
+          target_field: rule.value.target_field || 'test_field',
+          condition: rule.value.condition || '',
+          action: rule.value.action || '',
+          rule_type: rule.value.rule_type || 'formula',
+          priority: rule.value.priority || 100,
+          active: rule.value.active !== undefined ? rule.value.active : true
+        }
+        
         const response = await fetch('/api/rules/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            rule: rule.value,
+            rule: completeRule,
             sample_transaction: sampleData
           })
         })
         
         if (!response.ok) {
-          throw new Error('Failed to test rule')
+          const errorData = await response.json()
+          throw new Error(errorData.detail || 'Failed to test rule')
         }
         
         testResult.value = await response.json()
@@ -476,10 +572,11 @@ export default {
     const loadTransactions = async () => {
       try {
         loadingTransactions.value = true
-        const response = await fetch('/api/rules/test/transactions?limit=50')
+        const response = await fetch('/api/transactions/?limit=50')
         if (!response.ok) throw new Error('Failed to load transactions')
         const data = await response.json()
         availableTransactions.value = data.transactions
+        filteredTransactions.value = data.transactions
       } catch (error) {
         console.error('Error loading transactions:', error)
       } finally {
@@ -487,11 +584,49 @@ export default {
       }
     }
 
+    const filterTransactions = () => {
+      if (!transactionSearchQuery.value.trim()) {
+        filteredTransactions.value = availableTransactions.value
+        return
+      }
+      
+      const query = transactionSearchQuery.value.toLowerCase()
+      filteredTransactions.value = availableTransactions.value.filter(transaction => {
+        const content = transaction.ingested_content || {}
+        const searchableText = [
+          content.merchant || '',
+          content.description || '',
+          content.amount || '',
+          transaction.statement.filename || ''
+        ].join(' ').toLowerCase()
+        
+        return searchableText.includes(query)
+      })
+    }
+
+    const getTransactionPreview = (transaction) => {
+      const content = transaction.ingested_content || {}
+      const preview = {}
+      
+      // Show up to 3 key fields for preview
+      const keyFields = ['merchant', 'amount', 'description', 'date', 'type']
+      let count = 0
+      
+      for (const field of keyFields) {
+        if (content[field] && count < 3) {
+          preview[field] = String(content[field]).substring(0, 20)
+          count++
+        }
+      }
+      
+      return preview
+    }
+
     const loadSelectedTransaction = async (transactionId) => {
       if (!transactionId) return
       
       try {
-        const response = await fetch(`/api/rules/test/transactions/${transactionId}`)
+        const response = await fetch(`/api/transactions/${transactionId}`)
         if (!response.ok) throw new Error('Failed to load transaction')
         const transaction = await response.json()
         selectedTransaction.value = transaction
@@ -518,6 +653,25 @@ export default {
       return new Date(dateString).toLocaleDateString()
     }
 
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        // You could add a toast notification here if available
+        console.log('JSON copied to clipboard')
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error)
+      }
+    }
+
+    const getFieldTooltip = (field) => {
+      const parts = []
+      if (field.description) parts.push(field.description)
+      if (field.sample_values && field.sample_values.length > 0) {
+        parts.push(`Sample: ${field.sample_values.slice(0, 3).join(', ')}`)
+      }
+      return parts.join(' | ')
+    }
+
     // Lifecycle
     onMounted(() => {
       loadSampleData()
@@ -539,11 +693,17 @@ export default {
       selectedTransactionId,
       selectedTransaction,
       loadingTransactions,
+      transactionSearchQuery,
+      filteredTransactions,
       setDataSource,
       loadTransactions,
       loadSelectedTransaction,
       getTransactionDisplayName,
-      formatDate
+      formatDate,
+      filterTransactions,
+      getTransactionPreview,
+      copyToClipboard,
+      getFieldTooltip
     }
   }
 }

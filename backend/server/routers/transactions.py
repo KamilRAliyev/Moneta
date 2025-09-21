@@ -67,6 +67,44 @@ async def list_transactions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
+
 @router.get("/metadata")
 async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))):
     """
@@ -203,6 +241,44 @@ async def get_filtered_transactions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
+
 @router.get("/{transaction_id}")
 async def get_transaction(
     transaction_id: str,
@@ -247,6 +323,44 @@ async def get_transaction(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
+
 @router.delete("/{transaction_id}")
 async def delete_transaction(
     transaction_id: str,
@@ -277,6 +391,44 @@ async def delete_transaction(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
 
 @router.get("/statement/{statement_id}")
 async def get_transactions_by_statement(
@@ -338,6 +490,44 @@ async def get_transactions_by_statement(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
+
 @router.get("/search/content")
 async def search_transactions_by_content(
     q: str = Query(..., description="Search query for transaction content"),
@@ -397,3 +587,41 @@ async def search_transactions_by_content(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.delete("/")
+async def delete_all_transactions(
+    db: Session = Depends(lambda: get_db("main"))
+):
+    """
+    Delete all transactions from the database.
+    
+    WARNING: This action cannot be undone!
+    
+    Args:
+        db: Database session
+    
+    Returns:
+        Confirmation message with count of deleted transactions
+    """
+    try:
+        # Count transactions before deletion
+        total_count = db.query(Transaction).count()
+        
+        if total_count == 0:
+            return {
+                "message": "No transactions found to delete",
+                "removed_count": 0
+            }
+        
+        # Delete all transactions
+        db.query(Transaction).delete()
+        db.commit()
+        
+        return {
+            "message": f"Successfully deleted {total_count} transactions",
+            "removed_count": total_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete transactions: {str(e)}")
