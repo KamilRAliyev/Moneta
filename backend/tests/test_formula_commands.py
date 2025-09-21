@@ -26,7 +26,9 @@ class TestFormulaCommands:
             'add', 
             'subtract', 
             'multiply', 
-            'divide'
+            'divide',
+            'regex',
+            'equals'
         ]
         
         for expected_cmd in expected_commands:
@@ -231,7 +233,7 @@ class TestFormulaCommands:
         commands = command_registry.list_commands()
         categories = {cmd.category for cmd in commands}
         
-        expected_categories = {'date', 'numeric', 'math'}
+        expected_categories = {'date', 'numeric', 'math', 'text', 'comparison'}
         assert expected_categories.issubset(categories)
     
     def test_command_execution_error_handling(self):
@@ -245,6 +247,220 @@ class TestFormulaCommands:
         result = date_cmd.execute('invalid-date-string')
         # Should handle gracefully and return None
         assert result.value is None or not result.success
+    
+    def test_regex_command(self):
+        """Test regex command with various patterns and text"""
+        command = command_registry.get_command('regex')
+        assert command is not None
+        
+        # Test basic pattern matching
+        test_cases = [
+            # Basic number extraction
+            (r'\d+', 'Price: $123.45', False, 0, '123'),
+            (r'\d+', 'No numbers here', False, 0, None),
+            
+            # Group extraction
+            (r'\$(\d+\.\d{2})', 'Total: $99.99', False, 1, '99.99'),
+            (r'(\d{4})-(\d{2})-(\d{2})', 'Date: 2024-01-15', False, 1, '2024'),
+            (r'(\d{4})-(\d{2})-(\d{2})', 'Date: 2024-01-15', False, 2, '01'),
+            (r'(\d{4})-(\d{2})-(\d{2})', 'Date: 2024-01-15', False, 3, '15'),
+            
+            # Email extraction
+            (r'[A-Za-z]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', 'Contact: john@example.com', False, 0, 'john@example.com'),
+            (r'([A-Za-z]+)@([A-Za-z0-9.-]+)\.([A-Za-z]{2,})', 'Contact: john@example.com', False, 1, 'john'),
+            (r'([A-Za-z]+)@([A-Za-z0-9.-]+)\.([A-Za-z]{2,})', 'Contact: john@example.com', False, 2, 'example'),
+            (r'([A-Za-z]+)@([A-Za-z0-9.-]+)\.([A-Za-z]{2,})', 'Contact: john@example.com', False, 3, 'com'),
+            
+            # Multiple matches with return_all
+            (r'\b[A-Z]{2,}\b', 'The USA and UK are countries', True, 0, ['USA', 'UK']),
+            (r'\d+', 'Numbers: 123, 456, 789', True, 0, ['123', '456', '789']),
+            (r'(\d+)-(\d+)', 'Ranges: 10-20, 30-40', True, 1, ['10', '30']),
+            (r'(\d+)-(\d+)', 'Ranges: 10-20, 30-40', True, 2, ['20', '40']),
+            
+            # Edge cases
+            ('', 'test', False, 0, None),
+            (r'\d+', '', False, 0, None),
+            (r'[invalid', 'test', False, 0, None),  # Invalid regex
+        ]
+        
+        for pattern, text, return_all, group_index, expected in test_cases:
+            result = command.execute(pattern, text, return_all, group_index)
+            
+            if expected is None:
+                # Should either fail or return None/empty
+                assert result.value is None or result.value == [] or not result.success
+            else:
+                assert result.success == True, f"Expected success for pattern '{pattern}' on text '{text}', got error: {result.error}"
+                assert result.value == expected, f"Expected {expected}, got {result.value} for pattern '{pattern}' on text '{text}'"
+    
+    def test_regex_command_error_handling(self):
+        """Test regex command error handling"""
+        command = command_registry.get_command('regex')
+        assert command is not None
+        
+        # Test invalid regex pattern
+        result = command.execute(r'[invalid', 'test')
+        assert not result.success
+        assert 'Invalid regex pattern' in result.error
+        
+        # Test with None inputs
+        result = command.execute(None, 'test')
+        assert result.value is None
+        
+        result = command.execute(r'\d+', None)
+        assert result.value is None
+        
+        # Test with empty strings
+        result = command.execute('', 'test')
+        assert result.value is None
+        
+        result = command.execute(r'\d+', '')
+        assert result.value is None
+    
+    def test_regex_command_metadata(self):
+        """Test regex command metadata"""
+        command = command_registry.get_command('regex')
+        assert command is not None
+        
+        metadata = command.metadata
+        assert metadata.name == 'regex'
+        assert metadata.category == 'text'
+        assert metadata.description is not None
+        assert len(metadata.parameters) == 4
+        assert metadata.return_type == DataType.ANY
+        assert len(metadata.examples) > 0
+        
+        # Check parameters
+        param_names = [p.name for p in metadata.parameters]
+        assert 'pattern' in param_names
+        assert 'text' in param_names
+        assert 'return_all' in param_names
+        assert 'group_index' in param_names
+        
+        # Check parameter details
+        pattern_param = next(p for p in metadata.parameters if p.name == 'pattern')
+        assert pattern_param.required == True
+        assert pattern_param.data_type == DataType.STRING
+        
+        text_param = next(p for p in metadata.parameters if p.name == 'text')
+        assert text_param.required == True
+        assert text_param.data_type == DataType.STRING
+        
+        return_all_param = next(p for p in metadata.parameters if p.name == 'return_all')
+        assert return_all_param.required == False
+        assert return_all_param.data_type == DataType.BOOLEAN
+        assert return_all_param.default_value == False
+        
+        group_index_param = next(p for p in metadata.parameters if p.name == 'group_index')
+        assert group_index_param.required == False
+        assert group_index_param.data_type == DataType.INTEGER
+        assert group_index_param.default_value == 0
+    
+    def test_equals_command(self):
+        """Test equals command with various value types"""
+        command = command_registry.get_command('equals')
+        assert command is not None
+        
+        # Test string comparisons
+        test_cases = [
+            # String comparisons
+            ('hello', 'hello', True, True),
+            ('hello', 'HELLO', True, False),
+            ('hello', 'HELLO', False, True),
+            ('Hello', 'hello', True, False),
+            ('Hello', 'hello', False, True),
+            ('', '', True, True),
+            ('test', '', True, False),
+            ('', 'test', True, False),
+            
+            # Numeric comparisons
+            (123, 123, True, True),
+            (123, 456, True, False),
+            (123.0, 123, True, True),
+            (123.5, 123.5, True, True),
+            (123.0, 123.5, True, False),
+            
+            # Mixed numeric comparisons (string number vs number)
+            ('123', 123, True, True),
+            (123, '123', True, True),
+            ('123.5', 123.5, True, True),
+            (123.5, '123.5', True, True),
+            ('123', 456, True, False),
+            (123, '456', True, False),
+            
+            # Boolean comparisons
+            (True, True, True, True),
+            (False, False, True, True),
+            (True, False, True, False),
+            (False, True, True, False),
+            
+            # Mixed boolean comparisons
+            (True, 'true', True, True),
+            (True, 'True', True, True),
+            (True, 'TRUE', True, True),
+            (True, '1', True, True),
+            (True, 1, True, True),
+            (True, 1.0, True, True),
+            (False, 'false', True, True),
+            (False, 'False', True, True),
+            (False, 'FALSE', True, True),
+            (False, '0', True, True),
+            (False, 0, True, True),
+            (False, 0.0, True, True),
+            (True, 'false', True, False),
+            (False, 'true', True, False),
+            
+            # None comparisons
+            (None, None, True, True),
+            (None, 'test', True, False),
+            ('test', None, True, False),
+            (None, 123, True, False),
+            (123, None, True, False),
+            
+            # Edge cases
+            ('', None, True, False),
+            (None, '', True, False),
+            (0, False, True, True),   # 0 equals False in boolean context
+            (1, True, True, True),    # 1 equals True in boolean context
+        ]
+        
+        for left, right, case_sensitive, expected in test_cases:
+            result = command.execute(left, right, case_sensitive)
+            assert result.success == True, f"Expected success for equals({left}, {right}, case_sensitive={case_sensitive}), got error: {result.error}"
+            assert result.value == expected, f"Expected {expected}, got {result.value} for equals({left}, {right}, case_sensitive={case_sensitive})"
+    
+    def test_equals_command_metadata(self):
+        """Test equals command metadata"""
+        command = command_registry.get_command('equals')
+        assert command is not None
+        
+        metadata = command.metadata
+        assert metadata.name == 'equals'
+        assert metadata.category == 'comparison'
+        assert metadata.description is not None
+        assert len(metadata.parameters) == 3
+        assert metadata.return_type == DataType.BOOLEAN
+        assert len(metadata.examples) > 0
+        
+        # Check parameters
+        param_names = [p.name for p in metadata.parameters]
+        assert 'left' in param_names
+        assert 'right' in param_names
+        assert 'case_sensitive' in param_names
+        
+        # Check parameter details
+        left_param = next(p for p in metadata.parameters if p.name == 'left')
+        assert left_param.required == True
+        assert left_param.data_type == DataType.ANY
+        
+        right_param = next(p for p in metadata.parameters if p.name == 'right')
+        assert right_param.required == True
+        assert right_param.data_type == DataType.ANY
+        
+        case_sensitive_param = next(p for p in metadata.parameters if p.name == 'case_sensitive')
+        assert case_sensitive_param.required == False
+        assert case_sensitive_param.data_type == DataType.BOOLEAN
+        assert case_sensitive_param.default_value == True
 
 
 def test_run_all_commands():
@@ -315,6 +531,21 @@ if __name__ == "__main__":
         
         test_instance.test_command_execution_error_handling()
         print("✓ Error handling test passed")
+        
+        test_instance.test_regex_command()
+        print("✓ Regex command test passed")
+        
+        test_instance.test_regex_command_error_handling()
+        print("✓ Regex error handling test passed")
+        
+        test_instance.test_regex_command_metadata()
+        print("✓ Regex metadata test passed")
+        
+        test_instance.test_equals_command()
+        print("✓ Equals command test passed")
+        
+        test_instance.test_equals_command_metadata()
+        print("✓ Equals metadata test passed")
         
         test_run_all_commands()
         print("✓ Integration test passed")

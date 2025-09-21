@@ -128,6 +128,26 @@ const formulasTest = reactive({
     fee: '$5.95',
     result: null,
     executing: false
+  },
+  // Regex test data
+  regexTest: {
+    pattern: '\\d+',
+    text: 'Price: $123.45',
+    returnAll: false,
+    groupIndex: 0,
+    result: null,
+    executing: false,
+    // Preset examples
+    examples: [
+      { name: 'Extract Numbers', pattern: '\\d+', text: 'Price: $123.45', returnAll: false, groupIndex: 0 },
+      { name: 'Extract Dollar Amount', pattern: '\\$(\\d+\\.\\d{2})', text: 'Total: $99.99', returnAll: false, groupIndex: 1 },
+      { name: 'Extract Email', pattern: '[A-Za-z]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', text: 'Contact: john@example.com', returnAll: false, groupIndex: 0 },
+      { name: 'Find All Uppercase Words', pattern: '\\b[A-Z]{2,}\\b', text: 'The USA and UK are countries', returnAll: true, groupIndex: 0 },
+      { name: 'Extract Date Parts', pattern: '(\\d{4})-(\\d{2})-(\\d{2})', text: 'Date: 2024-01-15', returnAll: false, groupIndex: 1 },
+      { name: 'Find All Numbers', pattern: '\\d+', text: 'Numbers: 123, 456, 789', returnAll: true, groupIndex: 0 },
+      { name: 'Extract Phone Number', pattern: '(\\d{3})-(\\d{3})-(\\d{4})', text: 'Call me at 555-123-4567', returnAll: false, groupIndex: 0 },
+      { name: 'Find All Emails', pattern: '[A-Za-z]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', text: 'Emails: john@example.com, jane@test.org', returnAll: true, groupIndex: 0 }
+    ]
   }
 })
 
@@ -353,6 +373,101 @@ const testAlternativeFormula = async () => {
   } finally {
     formulasTest.chainedTest.executing = false
   }
+}
+
+// Regex test functions
+const testRegexCommand = async () => {
+  formulasTest.regexTest.executing = true
+  formulasTest.regexTest.result = null
+  
+  try {
+    const result = await executeCommand('regex', [
+      formulasTest.regexTest.pattern,
+      formulasTest.regexTest.text
+    ], {
+      return_all: formulasTest.regexTest.returnAll,
+      group_index: Number(formulasTest.regexTest.groupIndex) || 0
+    })
+    
+    formulasTest.regexTest.result = result
+    
+    if (result.success) {
+      const resultType = Array.isArray(result.value) ? 'array' : typeof result.value
+      const resultPreview = Array.isArray(result.value) 
+        ? `[${result.value.length} items]` 
+        : JSON.stringify(result.value)
+      
+      success(`Regex match found (${resultType}): ${resultPreview}`, { duration: 8000 })
+    } else {
+      error(`Regex failed: ${result.error}`)
+    }
+  } catch (err) {
+    error(`Regex test failed: ${err.message}`)
+    formulasTest.regexTest.result = { success: false, error: err.message }
+  } finally {
+    formulasTest.regexTest.executing = false
+  }
+}
+
+const loadRegexExample = (example) => {
+  formulasTest.regexTest.pattern = example.pattern
+  formulasTest.regexTest.text = example.text
+  formulasTest.regexTest.returnAll = example.returnAll
+  formulasTest.regexTest.groupIndex = example.groupIndex
+  formulasTest.regexTest.result = null
+}
+
+const testAllRegexExamples = async () => {
+  formulasTest.regexTest.executing = true
+  
+  try {
+    const results = []
+    
+    for (const example of formulasTest.regexTest.examples) {
+      const result = await executeCommand('regex', [example.pattern, example.text], {
+        return_all: example.returnAll,
+        group_index: Number(example.groupIndex) || 0
+      })
+      
+      results.push({
+        name: example.name,
+        success: result.success,
+        value: result.value,
+        error: result.error
+      })
+    }
+    
+    // Show summary
+    const successCount = results.filter(r => r.success).length
+    const totalCount = results.length
+    
+    if (successCount === totalCount) {
+      success(`All ${totalCount} regex examples passed!`, { duration: 5000 })
+    } else {
+      warning(`${successCount}/${totalCount} regex examples passed`, { duration: 5000 })
+    }
+    
+    // Show individual results
+    results.forEach(result => {
+      if (result.success) {
+        const preview = Array.isArray(result.value) 
+          ? `[${result.value.length} items]` 
+          : JSON.stringify(result.value)
+        info(`${result.name}: ${preview}`)
+      } else {
+        error(`${result.name}: ${result.error}`)
+      }
+    })
+    
+  } catch (err) {
+    error(`Regex examples test failed: ${err.message}`)
+  } finally {
+    formulasTest.regexTest.executing = false
+  }
+}
+
+const clearRegexResult = () => {
+  formulasTest.regexTest.result = null
 }
 </script>
 
@@ -776,6 +891,205 @@ const testAlternativeFormula = async () => {
             <div><strong>Scenario 1:</strong> Money In: $1,500.00, Money Out: $200.50, Fee: $5.95 → Result: $1,293.55</div>
             <div><strong>Scenario 2:</strong> Money In: $(500.00), Money Out: $100.00, Fee: $10.00 → Result: -$610.00</div>
             <div><strong>Scenario 3:</strong> Money In: $2,000.00, Money Out: $(100.00), Fee: $50.00 → Result: $2,050.00</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Regex Testing Section -->
+    <Card class="mb-6">
+      <CardHeader class="pb-4">
+        <CardTitle class="text-lg">Regex Command Testing</CardTitle>
+        <CardDescription>Test the regex command with custom patterns and text extraction</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <!-- Quick Tests -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-medium">Quick Tests</div>
+            <div class="text-xs text-muted-foreground">
+              Test regex patterns and text extraction
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+            <Button 
+              @click="testRegexCommand" 
+              variant="outline" 
+              size="sm" 
+              class="text-xs"
+              :disabled="formulasTest.regexTest.executing"
+            >
+              {{ formulasTest.regexTest.executing ? 'Testing...' : 'Test Regex' }}
+            </Button>
+            <Button 
+              @click="testAllRegexExamples" 
+              variant="outline" 
+              size="sm" 
+              class="text-xs"
+              :disabled="formulasTest.regexTest.executing"
+            >
+              Test All Examples
+            </Button>
+            <Button 
+              @click="clearRegexResult" 
+              variant="outline" 
+              size="sm" 
+              class="text-xs"
+            >
+              Clear Results
+            </Button>
+          </div>
+        </div>
+
+        <!-- Regex Input Form -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <!-- Pattern Input -->
+          <div class="p-3 border rounded-md bg-muted/50">
+            <div class="text-sm font-medium mb-2">Regex Pattern</div>
+            <div class="space-y-2">
+              <Textarea 
+                v-model="formulasTest.regexTest.pattern"
+                placeholder="Enter regex pattern (e.g., \d+, \$(.*), [A-Z]+)"
+                class="h-16 text-xs font-mono"
+                rows="3"
+              />
+              <div class="text-xs text-muted-foreground">
+                Use standard regex syntax. Groups: (group), Quantifiers: +, *, ?, {n}
+              </div>
+            </div>
+          </div>
+
+          <!-- Text Input -->
+          <div class="p-3 border rounded-md bg-muted/50">
+            <div class="text-sm font-medium mb-2">Text to Search</div>
+            <div class="space-y-2">
+              <Textarea 
+                v-model="formulasTest.regexTest.text"
+                placeholder="Enter text to search in"
+                class="h-16 text-xs"
+                rows="3"
+              />
+              <div class="text-xs text-muted-foreground">
+                The text that will be searched with the regex pattern
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Options -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div class="p-3 border rounded-md bg-muted/50">
+            <div class="text-sm font-medium mb-2">Options</div>
+            <div class="space-y-3">
+              <div class="flex items-center space-x-2">
+                <input 
+                  v-model="formulasTest.regexTest.returnAll"
+                  type="checkbox"
+                  id="returnAll"
+                  class="w-4 h-4"
+                />
+                <label for="returnAll" class="text-xs">Return all matches (not just first)</label>
+              </div>
+              <div class="space-y-1">
+                <label for="groupIndex" class="text-xs text-muted-foreground">Group Index</label>
+                <Input 
+                  id="groupIndex"
+                  v-model.number="formulasTest.regexTest.groupIndex"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  class="h-8 text-xs"
+                />
+                <div class="text-xs text-muted-foreground">
+                  0 = full match, 1+ = capture groups
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preset Examples -->
+          <div class="p-3 border rounded-md bg-muted/50">
+            <div class="text-sm font-medium mb-2">Preset Examples</div>
+            <div class="space-y-2 max-h-32 overflow-y-auto">
+              <Button 
+                v-for="example in formulasTest.regexTest.examples" 
+                :key="example.name"
+                @click="loadRegexExample(example)"
+                variant="outline"
+                size="sm"
+                class="w-full text-xs justify-start h-8"
+              >
+                {{ example.name }}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Display -->
+        <div v-if="formulasTest.regexTest.result" class="space-y-4">
+          <!-- Result Summary -->
+          <div class="p-4 border rounded-md" :class="formulasTest.regexTest.result.success ? 'bg-green-50 dark:bg-green-950' : 'bg-red-50 dark:bg-red-950'">
+            <div class="text-sm font-medium mb-2" :class="formulasTest.regexTest.result.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'">
+              {{ formulasTest.regexTest.result.success ? '✅ Regex Match Found' : '❌ Regex Failed' }}
+            </div>
+            
+            <div v-if="formulasTest.regexTest.result.success" class="space-y-2">
+              <div class="text-xs">
+                <span class="font-semibold">Pattern:</span> 
+                <code class="ml-1 text-blue-700 dark:text-blue-300">{{ formulasTest.regexTest.pattern }}</code>
+              </div>
+              <div class="text-xs">
+                <span class="font-semibold">Text:</span> 
+                <span class="ml-1">{{ formulasTest.regexTest.text }}</span>
+              </div>
+              <div class="text-xs">
+                <span class="font-semibold">Options:</span> 
+                <span class="ml-1">
+                  return_all={{ formulasTest.regexTest.returnAll }}, 
+                  group_index={{ formulasTest.regexTest.groupIndex }}
+                </span>
+              </div>
+              <div class="text-xs">
+                <span class="font-semibold">Result:</span> 
+                <code class="ml-1 text-green-700 dark:text-green-300">
+                  {{ Array.isArray(formulasTest.regexTest.result.value) 
+                      ? `[${formulasTest.regexTest.result.value.length} items]` 
+                      : JSON.stringify(formulasTest.regexTest.result.value) }}
+                </code>
+              </div>
+            </div>
+            
+            <div v-if="!formulasTest.regexTest.result.success" class="text-sm text-red-600">
+              Error: {{ formulasTest.regexTest.result.error }}
+            </div>
+          </div>
+
+          <!-- Detailed Results -->
+          <div v-if="formulasTest.regexTest.result.success && formulasTest.regexTest.result.value" class="p-3 border rounded-md bg-slate-50 dark:bg-slate-800">
+            <div class="text-sm font-medium mb-2">Detailed Results</div>
+            <div class="text-xs font-mono">
+              <div v-if="Array.isArray(formulasTest.regexTest.result.value)">
+                <div v-for="(item, index) in formulasTest.regexTest.result.value" :key="index" class="mb-1">
+                  [{{ index }}]: {{ JSON.stringify(item) }}
+                </div>
+              </div>
+              <div v-else>
+                {{ JSON.stringify(formulasTest.regexTest.result.value) }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Regex Help -->
+        <div class="mt-6 p-3 border rounded-md bg-blue-50 dark:bg-blue-950">
+          <div class="text-sm font-medium mb-2">Regex Help</div>
+          <div class="text-xs space-y-1 text-blue-800 dark:text-blue-200">
+            <div><strong>Basic patterns:</strong> \d (digits), \w (word chars), \s (whitespace), . (any char)</div>
+            <div><strong>Quantifiers:</strong> + (1+), * (0+), ? (0-1), {n} (exactly n), {n,m} (n to m)</div>
+            <div><strong>Groups:</strong> (pattern) creates capture group, (?:pattern) non-capturing</div>
+            <div><strong>Anchors:</strong> ^ (start), $ (end), \b (word boundary)</div>
+            <div><strong>Character classes:</strong> [abc] (any of a,b,c), [a-z] (range), [^abc] (not a,b,c)</div>
           </div>
         </div>
       </CardContent>

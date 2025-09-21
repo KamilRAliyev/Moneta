@@ -4,7 +4,7 @@ Implementation of formula commands for transaction processing
 import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Union, Optional
+from typing import Union, Optional, List, Any
 
 try:
     import dateinfer
@@ -299,3 +299,190 @@ class DivideCommand(BaseCommand):
         if float(divisor) == 0:
             raise ValueError("Division by zero")
         return float(dividend) / float(divisor)
+
+
+class RegexCommand(BaseCommand):
+    """Command to apply regex pattern matching and extraction to text"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="regex",
+            description="Apply regex pattern to text and return matches or extracted groups",
+            category="text",
+            parameters=[
+                CommandParameter(
+                    name="pattern",
+                    data_type=DataType.STRING,
+                    description="Regular expression pattern to match",
+                    required=True
+                ),
+                CommandParameter(
+                    name="text",
+                    data_type=DataType.STRING,
+                    description="Text to search in",
+                    required=True
+                ),
+                CommandParameter(
+                    name="return_all",
+                    data_type=DataType.BOOLEAN,
+                    description="If true, return all matches; if false, return first match only",
+                    required=False,
+                    default_value=False
+                ),
+                CommandParameter(
+                    name="group_index",
+                    data_type=DataType.INTEGER,
+                    description="Index of capture group to return (0 for full match, 1+ for groups)",
+                    required=False,
+                    default_value=0
+                )
+            ],
+            return_type=DataType.ANY,
+            examples=[
+                "regex(r'\\d+', 'Price: $123.45')",
+                "regex(r'\\$(\\d+\\.\\d{2})', 'Total: $99.99', group_index=1)",
+                "regex(r'\\b[A-Z]{2,}\\b', 'The USA and UK are countries', return_all=true)",
+                "regex(r'(\\d{4})-(\\d{2})-(\\d{2})', 'Date: 2024-01-15', group_index=1)",
+                "regex(r'[A-Za-z]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', 'Contact: john@example.com')"
+            ]
+        )
+    
+    def _execute_impl(self, pattern: str, text: str, return_all: bool = False, group_index: int = 0) -> Optional[Union[str, List[str]]]:
+        """Apply regex pattern to text and return matches"""
+        if not pattern or not text:
+            return None
+            
+        try:
+            # Ensure group_index is an integer, default to 0 if empty or invalid
+            if group_index is None or group_index == '':
+                group_index = 0
+            else:
+                group_index = int(group_index)
+            
+            # Compile the regex pattern
+            regex = re.compile(pattern)
+            
+            if return_all:
+                # Find all matches
+                matches = regex.findall(text)
+                if not matches:
+                    return []
+                
+                # If group_index is specified and we have groups, extract the specific group
+                if group_index > 0 and matches and isinstance(matches[0], tuple):
+                    return [match[group_index - 1] if group_index <= len(match) else None for match in matches]
+                elif group_index > 0 and matches and not isinstance(matches[0], tuple):
+                    # Single group case - findall returns list of strings
+                    return [match for match in matches]
+                else:
+                    return matches
+            else:
+                # Find first match
+                match = regex.search(text)
+                if not match:
+                    return None
+                
+                # Return specific group or full match
+                if group_index == 0:
+                    return match.group(0)  # Full match
+                elif group_index <= match.lastindex:
+                    return match.group(group_index)
+                else:
+                    return None
+                    
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Regex execution error: {str(e)}")
+
+
+class EqualsCommand(BaseCommand):
+    """Command to compare two values for equality"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="equals",
+            description="Compare two values for equality (supports string, numeric, and boolean comparisons)",
+            category="comparison",
+            parameters=[
+                CommandParameter(
+                    name="left",
+                    data_type=DataType.ANY,
+                    description="Left value to compare",
+                    required=True
+                ),
+                CommandParameter(
+                    name="right",
+                    data_type=DataType.ANY,
+                    description="Right value to compare",
+                    required=True
+                ),
+                CommandParameter(
+                    name="case_sensitive",
+                    data_type=DataType.BOOLEAN,
+                    description="For string comparisons, whether to be case sensitive",
+                    required=False,
+                    default_value=True
+                )
+            ],
+            return_type=DataType.BOOLEAN,
+            examples=[
+                "equals('hello', 'hello')",
+                "equals('Hello', 'hello', case_sensitive=false)",
+                "equals(123, 123)",
+                "equals(amount_to_float(money_in), 1500.0)",
+                "equals(statement_name, 'Chase Bank')",
+                "equals(transaction_type, 'DEBIT')",
+                "equals(description, 'ATM WITHDRAWAL', case_sensitive=false)"
+            ]
+        )
+    
+    def _execute_impl(self, left: Any, right: Any, case_sensitive: bool = True) -> bool:
+        """Compare two values for equality"""
+        if left is None and right is None:
+            return True
+        if left is None or right is None:
+            return False
+        
+        # Handle string comparisons
+        if isinstance(left, str) and isinstance(right, str):
+            if case_sensitive:
+                return left == right
+            else:
+                return left.lower() == right.lower()
+        
+        # Handle numeric comparisons
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            return float(left) == float(right)
+        
+        # Handle mixed numeric comparisons (string number vs number)
+        try:
+            if isinstance(left, str) and isinstance(right, (int, float)):
+                return float(left) == float(right)
+            elif isinstance(left, (int, float)) and isinstance(right, str):
+                return float(left) == float(right)
+        except (ValueError, TypeError):
+            pass
+        
+        # Handle boolean comparisons
+        if isinstance(left, bool) and isinstance(right, bool):
+            return left == right
+        
+        # Handle mixed boolean comparisons
+        if isinstance(left, bool) and isinstance(right, (str, int, float)):
+            if right in ('true', 'True', 'TRUE', '1', 1, 1.0):
+                return left == True
+            elif right in ('false', 'False', 'FALSE', '0', 0, 0.0):
+                return left == False
+            else:
+                return False  # No other values should equal boolean
+        elif isinstance(left, (str, int, float)) and isinstance(right, bool):
+            if left in ('true', 'True', 'TRUE', '1', 1, 1.0):
+                return right == True
+            elif left in ('false', 'False', 'FALSE', '0', 0, 0.0):
+                return right == False
+            else:
+                return False  # No other values should equal boolean
+        
+        # Default comparison
+        return left == right

@@ -24,6 +24,12 @@ The system includes built-in commands for common transaction processing tasks:
 - **`multiply`**: Multiply two numeric values
 - **`divide`**: Divide two numeric values
 
+### Text Processing Commands
+- **`regex`**: Apply regex pattern matching and extraction to text
+
+### Comparison Operations
+- **`equals`**: Compare two values for equality (supports string, numeric, and boolean comparisons)
+
 ## Endpoints
 
 ### GET /api/formulas/commands
@@ -420,6 +426,63 @@ POST /api/formulas/commands/subtract/execute
 ```
 
 3. **Build formula rule**: `net_amount = subtract(amount_to_float(money_in), amount_to_float(money_out))`
+
+### Text Processing with Regex
+
+**Scenario**: Extract specific information from transaction descriptions
+
+1. **Extract dollar amounts**:
+```bash
+POST /api/formulas/commands/regex/execute
+{
+  "args": ["\\$(\\d+\\.\\d{2})", "Total: $99.99"],
+  "kwargs": {"group_index": 1}
+}
+```
+
+2. **Find all uppercase words**:
+```bash
+POST /api/formulas/commands/regex/execute
+{
+  "args": ["\\b[A-Z]{2,}\\b", "The USA and UK are countries"],
+  "kwargs": {"return_all": true}
+}
+```
+
+3. **Build formula rule**: `extracted_amount = regex("\\$(\\d+\\.\\d{2})", description, group_index=1)`
+
+### Value Comparisons
+
+**Scenario**: Filter transactions based on field values
+
+1. **Compare statement names**:
+```bash
+POST /api/formulas/commands/equals/execute
+{
+  "args": ["Chase Bank", "Chase Bank"],
+  "kwargs": {}
+}
+```
+
+2. **Case-insensitive string comparison**:
+```bash
+POST /api/formulas/commands/equals/execute
+{
+  "args": ["DEBIT", "debit"],
+  "kwargs": {"case_sensitive": false}
+}
+```
+
+3. **Numeric comparison**:
+```bash
+POST /api/formulas/commands/equals/execute
+{
+  "args": [1500.0, 1500],
+  "kwargs": {}
+}
+```
+
+4. **Build formula rule**: `is_chase_transaction = equals(statement_name, "Chase Bank")`
 
 ## Integration with Transaction Processing
 

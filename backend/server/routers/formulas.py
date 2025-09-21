@@ -29,7 +29,6 @@ class CommandInfo(BaseModel):
 
 class CommandExecuteRequest(BaseModel):
     """Request model for executing a command"""
-    command_name: str
     args: List[Any] = Field(default_factory=list)
     kwargs: Dict[str, Any] = Field(default_factory=dict)
 

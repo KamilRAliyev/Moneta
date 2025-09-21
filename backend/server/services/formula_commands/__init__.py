@@ -12,7 +12,9 @@ from .commands import (
     AddCommand,
     SubtractCommand,
     MultiplyCommand,
-    DivideCommand
+    DivideCommand,
+    RegexCommand,
+    EqualsCommand
 )
 
 # Register all available commands
@@ -24,7 +26,9 @@ def _register_commands():
         AddCommand,
         SubtractCommand, 
         MultiplyCommand,
-        DivideCommand
+        DivideCommand,
+        RegexCommand,
+        EqualsCommand
     ]
     
     for command_class in commands:
