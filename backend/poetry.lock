@@ -93,6 +93,20 @@ files = [
 markers = {main = "platform_system == \"Windows\"", dev = "sys_platform == \"win32\""}
 
 [[package]]
+name = "dateinfer"
+version = "0.2.0"
+description = "Infers date format from examples"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "dateinfer-0.2.0.tar.gz", hash = "sha256:bb8ede02814be2d4690992b3fbbdb46cb0d5765ee192e75fbe0be9c12ae264cb"},
+]
+
+[package.dependencies]
+pytz = "*"
+
+[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 description = "An implementation of lxml.xmlfile for the standard library"
@@ -1017,4 +1031,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.12"
-content-hash = "a9c403be46760b7de3d245aba3a2b0e4d9e63536928cd3c6744de1b7e4185c7e"
+content-hash = "ec92fcfbb1b5d1fcf60574b750a6da38ad6dd3dfde2d973cc7b185f96c842ca6"

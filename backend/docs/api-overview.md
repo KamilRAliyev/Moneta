@@ -75,6 +75,18 @@ CORS is enabled for all origins with the following settings:
 4. **Duplicates**: Files with identical content (hash) are rejected
 5. **Validation**: File type and content validation is performed
 
+## Available APIs
+
+### Core APIs
+- **[Statements API](statements-api.md)**: File upload and management
+- **[Transactions API](transactions-api.md)**: Transaction data processing and retrieval
+- **[Formulas API](formulas-api.md)**: Formula-based commands for data transformation
+
+### API Endpoints Summary
+- **Statements**: `/api/statements/*` - File upload, processing, and metadata
+- **Transactions**: `/api/transactions/*` - Transaction data and filtering
+- **Formulas**: `/api/formulas/*` - Command discovery, execution, and field mapping
+
 ## Database Schema
 
 ### Statement Model
@@ -86,6 +98,33 @@ CORS is enabled for all origins with the following settings:
   "file_hash": "string (SHA256)",
   "mime_type": "string",
   "processed": "boolean",
+  "columns": "JSON (optional)",
   "created_at": "datetime"
+}
+```
+
+### Transaction Model
+```python
+{
+  "id": "string (UUID)",
+  "statement_id": "string (UUID)",
+  "ingested_content": "JSON",
+  "ingested_content_hash": "string (SHA256)",
+  "ingested_at": "datetime",
+  "computed_content": "JSON (optional)",
+  "computed_content_hash": "string (SHA256, optional)",
+  "computed_at": "datetime (optional)",
+  "created_at": "datetime"
+}
+```
+
+### Transaction Metadata Model
+```python
+{
+  "id": "string",
+  "ingested_columns": "JSON",
+  "computed_columns": "JSON", 
+  "created_at": "datetime",
+  "updated_at": "datetime"
 }
 ```

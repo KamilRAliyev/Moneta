@@ -5,7 +5,8 @@ export const BACKEND_CONFIG = {
   endpoints: {
     health: 'api/health',
     transactions: '/transactions',
-    statements: '/statements'
+    statements: '/statements',
+    formulas: '/formulas'
   }
 }
 
