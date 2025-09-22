@@ -14,6 +14,7 @@ from .commands import (
     MultiplyCommand,
     DivideCommand,
     RegexCommand,
+    DefaultIfNoneCommand,
     EqualsCommand
 )
 
@@ -28,6 +29,7 @@ def _register_commands():
         MultiplyCommand,
         DivideCommand,
         RegexCommand,
+        DefaultIfNoneCommand,
         EqualsCommand
     ]
     

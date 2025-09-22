@@ -396,6 +396,42 @@ class RegexCommand(BaseCommand):
             raise ValueError(f"Regex execution error: {str(e)}")
 
 
+class DefaultIfNoneCommand(BaseCommand):
+    """Command to return a default value if input is None"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="default_if_none",
+            description="Return a default value if the input is None, otherwise return the input",
+            category="utility",
+            parameters=[
+                CommandParameter(
+                    name="value",
+                    data_type=DataType.ANY,
+                    description="Value to check",
+                    required=True
+                ),
+                CommandParameter(
+                    name="default_value",
+                    data_type=DataType.ANY,
+                    description="Default value to return if input is None",
+                    required=True
+                )
+            ],
+            return_type=DataType.ANY,
+            examples=[
+                "default_if_none(amount_to_float(money_in), 0)",
+                "default_if_none(amount_to_float(money_out), 0)",
+                "default_if_none(amount_to_float(fee), 0)",
+                "default_if_none(description, 'No description')"
+            ]
+        )
+    
+    def _execute_impl(self, value: Any, default_value: Any) -> Any:
+        """Return default value if input is None, otherwise return input"""
+        return default_value if value is None else value
+
+
 class EqualsCommand(BaseCommand):
     """Command to compare two values for equality"""
     
