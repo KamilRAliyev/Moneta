@@ -3,7 +3,9 @@ import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useTransactionsStore } from '@/stores/transactions.js'
 import { useSettingsStore } from '@/stores/settings.js'
 import { useAlert } from '@/composables/useAlert.js'
+import { getFilteredTransactions } from '@/api/transactionFiltering.js'
 import DataTable from '@/components/DataTable.vue'
+import TransactionFilterPanel from '@/components/TransactionFilterPanel.vue'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +32,12 @@ const showColumnDropdown = ref(false)
 const showDebugInfo = ref(false)
 const showJsonModal = ref(false)
 const selectedTransactionJson = ref(null)
+const currentFilters = ref({
+  search: '',
+  fieldFilters: [],
+  sortBy: '',
+  sortOrder: 'asc'
+})
 
 // Computed
 const availableColumns = computed(() => {
@@ -160,10 +168,15 @@ async function loadTransactions() {
     const skip = (currentPage.value - 1) * pageSize.value
     const columns = selectedColumns.value.join(',')
     
-    const response = await transactionsStore.fetchFilteredTransactions({
+    // Use direct backend filtering API instead of store
+    const response = await getFilteredTransactions({
       columns,
       skip,
-      limit: pageSize.value
+      limit: pageSize.value,
+      search: currentFilters.value.search,
+      fieldFilters: currentFilters.value.fieldFilters,
+      sortBy: currentFilters.value.sortBy,
+      sortOrder: currentFilters.value.sortOrder
     })
     
     filteredTransactions.value = response.transactions
@@ -237,6 +250,28 @@ function clearSelection() {
 
 function refreshData() {
   loadTransactions()
+}
+
+// Filter event handlers
+function handleFilterChange(filterParams) {
+  currentFilters.value = { ...filterParams }
+  currentPage.value = 1 // Reset to first page when filters change
+  if (hasSelectedColumns.value) {
+    loadTransactions()
+  }
+}
+
+function handleClearFilters() {
+  currentFilters.value = {
+    search: '',
+    fieldFilters: [],
+    sortBy: '',
+    sortOrder: 'asc'
+  }
+  currentPage.value = 1
+  if (hasSelectedColumns.value) {
+    loadTransactions()
+  }
 }
 
 async function showTransactionJson(transactionId) {
@@ -506,6 +541,14 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Filter Panel - Always visible and open on top -->
+    <TransactionFilterPanel
+      v-if="hasSelectedColumns"
+      :available-columns="availableColumns"
+      :loading="loading"
+      @filter-change="handleFilterChange"
+      @clear-filters="handleClearFilters"
+    />
 
     <!-- Pagination Controls -->
     <div v-if="hasSelectedColumns" class="flex items-center justify-between">

@@ -73,18 +73,40 @@ export const transactionsApi = {
   },
 
   /**
-   * Get filtered transactions with column selection and pagination
+   * Get filtered transactions with column selection, filtering, sorting and pagination
    * @param {Object} params - Query parameters
    * @param {string} params.columns - Comma-separated list of columns to include
    * @param {number} params.skip - Number of records to skip (default: 0)
    * @param {number} params.limit - Maximum number of records to return (default: 100, max: 100000)
+   * @param {string} params.sort_by - Field to sort by
+   * @param {string} params.sort_order - Sort order: 'asc' or 'desc'
+   * @param {string} params.filter_field - Field to filter by
+   * @param {string} params.filter_value - Value to filter by
+   * @param {string} params.filter_operator - Filter operator: 'equals', 'contains', 'startswith', 'endswith', 'gt', 'lt', 'gte', 'lte'
+   * @param {string} params.search - General search term across all content
+   * @param {string} params.statement_id - Filter by statement ID
    * @returns {Promise} Response data
    */
-  async getFilteredTransactions({ columns, skip = 0, limit = 100 } = {}) {
-    const params = { skip, limit }
-    if (columns) {
-      params.columns = columns
-    }
+  async getFilteredTransactions({ 
+    columns, 
+    skip = 0, 
+    limit = 100, 
+    sort_by, 
+    sort_order = 'asc',
+    filter_field,
+    filter_value,
+    filter_operator = 'contains',
+    search,
+    statement_id
+  } = {}) {
+    const params = { skip, limit, sort_order, filter_operator }
+    
+    if (columns) params.columns = columns
+    if (sort_by) params.sort_by = sort_by
+    if (filter_field) params.filter_field = filter_field
+    if (filter_value) params.filter_value = filter_value
+    if (search) params.search = search
+    if (statement_id) params.statement_id = statement_id
     
     const response = await api.get('/transactions/filtered', { params })
     return response.data

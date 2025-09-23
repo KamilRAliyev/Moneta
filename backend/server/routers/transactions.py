@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import String
 from typing import List, Optional
@@ -160,27 +160,190 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
 
 @router.get("/filtered")
 async def get_filtered_transactions(
+    request: Request,
     columns: Optional[str] = Query(None, description="Comma-separated list of columns to include"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=100000, description="Maximum number of records to return"),
+    search: Optional[str] = Query(None, description="General search across all transaction content"),
+    sort_by: Optional[str] = Query(None, description="Field to sort by"),
+    sort_order: str = Query("asc", description="Sort order (asc/desc)"),
+    statement_id: Optional[str] = Query(None, description="Filter by statement ID"),
     db: Session = Depends(lambda: get_db("main"))
 ):
     """
-    Get transactions filtered by specific columns with pagination.
+    Get transactions filtered by specific columns with advanced filtering and pagination.
     
     Args:
         columns: Comma-separated list of columns to include in response
         skip: Number of records to skip
         limit: Maximum number of records to return
+        search: General search across all transaction content
+        sort_by: Field to sort by
+        sort_order: Sort order (asc/desc)
+        statement_id: Filter by statement ID
         db: Database session
     
     Returns:
-        List of transactions with only specified columns
+        List of transactions with filtering applied
     """
     try:
+        from sqlalchemy import or_, and_, desc, asc, text, Float
+        from urllib.parse import parse_qs, urlparse
+        from fastapi import Request
+        import json
+        
         query = db.query(Transaction).options(joinedload(Transaction.statement))
         
+        # Apply statement filter
+        if statement_id:
+            query = query.filter(Transaction.statement_id == statement_id)
+        
+        # Apply general search
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Transaction.ingested_content.contains(search),
+                    Transaction.computed_content.contains(search)
+                )
+            )
+        
+        # Implement field-specific filtering
+        query_params = dict(request.query_params)
+        filter_params = {}
+        for key, value in query_params.items():
+            if key.startswith('filter_') and '_' in key[7:]:
+                parts = key.split('_')
+                if len(parts) >= 3:
+                    filter_index = parts[1]
+                    filter_type = parts[2]
+                    
+                    if filter_index not in filter_params:
+                        filter_params[filter_index] = {}
+                    filter_params[filter_index][filter_type] = value
+        
+        if filter_params:
+            print(f"DEBUG: Filter parameters received: {filter_params}")
+            
+            # Apply field filters
+            for filter_index, filter_data in filter_params.items():
+                if 'field' in filter_data and 'operator' in filter_data and 'value' in filter_data:
+                    field = filter_data['field']
+                    operator = filter_data['operator']
+                    value = filter_data['value']
+                    
+                    if not field or not value:
+                        continue
+                    
+                    # Convert value to appropriate type for numeric comparisons
+                    try:
+                        # Try to convert to float for numeric fields
+                        numeric_value = float(value)
+                        is_numeric = True
+                    except (ValueError, TypeError):
+                        is_numeric = False
+                    
+                    # Apply filter based on operator using raw SQL for JSON field access
+                    if operator == 'equals':
+                        if is_numeric:
+                            query = query.filter(
+                                or_(
+                                    text(f"json_extract(ingested_content, '$.{field}') = :value"),
+                                    text(f"json_extract(computed_content, '$.{field}') = :value")
+                                )
+                            ).params(value=value)
+                        else:
+                            query = query.filter(
+                                or_(
+                                    text(f"json_extract(ingested_content, '$.{field}') LIKE :value"),
+                                    text(f"json_extract(computed_content, '$.{field}') LIKE :value")
+                                )
+                            ).params(value=f"%{value}%")
+                    elif operator == 'contains':
+                        query = query.filter(
+                            or_(
+                                text(f"json_extract(ingested_content, '$.{field}') LIKE :value"),
+                                text(f"json_extract(computed_content, '$.{field}') LIKE :value")
+                            )
+                        ).params(value=f"%{value}%")
+                    elif operator == 'startswith':
+                        query = query.filter(
+                            or_(
+                                text(f"json_extract(ingested_content, '$.{field}') LIKE :value"),
+                                text(f"json_extract(computed_content, '$.{field}') LIKE :value")
+                            )
+                        ).params(value=f"{value}%")
+                    elif operator == 'endswith':
+                        query = query.filter(
+                            or_(
+                                text(f"json_extract(ingested_content, '$.{field}') LIKE :value"),
+                                text(f"json_extract(computed_content, '$.{field}') LIKE :value")
+                            )
+                        ).params(value=f"%{value}")
+                    elif operator == 'not_equals':
+                        if is_numeric:
+                            query = query.filter(
+                                and_(
+                                    text(f"json_extract(ingested_content, '$.{field}') != :value"),
+                                    text(f"json_extract(computed_content, '$.{field}') != :value")
+                                )
+                            ).params(value=value)
+                        else:
+                            query = query.filter(
+                                and_(
+                                    ~text(f"json_extract(ingested_content, '$.{field}') LIKE :value"),
+                                    ~text(f"json_extract(computed_content, '$.{field}') LIKE :value")
+                                )
+                            ).params(value=f"%{value}%")
+                    elif operator in ['gt', 'gte', 'lt', 'lte'] and is_numeric:
+                        # Numeric comparisons
+                        if operator == 'gt':
+                            query = query.filter(
+                                or_(
+                                    text(f"CAST(json_extract(ingested_content, '$.{field}') AS REAL) > :value"),
+                                    text(f"CAST(json_extract(computed_content, '$.{field}') AS REAL) > :value")
+                                )
+                            ).params(value=numeric_value)
+                        elif operator == 'gte':
+                            query = query.filter(
+                                or_(
+                                    text(f"CAST(json_extract(ingested_content, '$.{field}') AS REAL) >= :value"),
+                                    text(f"CAST(json_extract(computed_content, '$.{field}') AS REAL) >= :value")
+                                )
+                            ).params(value=numeric_value)
+                        elif operator == 'lt':
+                            query = query.filter(
+                                or_(
+                                    text(f"CAST(json_extract(ingested_content, '$.{field}') AS REAL) < :value"),
+                                    text(f"CAST(json_extract(computed_content, '$.{field}') AS REAL) < :value")
+                                )
+                            ).params(value=numeric_value)
+                        elif operator == 'lte':
+                            query = query.filter(
+                                or_(
+                                    text(f"CAST(json_extract(ingested_content, '$.{field}') AS REAL) <= :value"),
+                                    text(f"CAST(json_extract(computed_content, '$.{field}') AS REAL) <= :value")
+                                )
+                            ).params(value=numeric_value)
+        
+        # Apply sorting
+        if sort_by:
+            if sort_by in ['id', 'statement_id', 'created_at', 'ingested_at', 'computed_at']:
+                # Sort by direct table columns
+                column = getattr(Transaction, sort_by)
+                if sort_order.lower() == 'desc':
+                    query = query.order_by(desc(column))
+                else:
+                    query = query.order_by(asc(column))
+            else:
+                # Sort by JSON fields (ingested_content or computed_content)
+                # This is more complex and might need custom SQL
+                pass
+        
+        # Get total count before applying pagination
         total = query.count()
+        
+        # Apply pagination
         transactions = query.offset(skip).limit(limit).all()
         
         # Parse columns filter
