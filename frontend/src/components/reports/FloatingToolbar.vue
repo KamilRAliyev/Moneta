@@ -336,6 +336,32 @@
           {{ isEditMode ? 'Edit Mode' : 'Lock Mode' }}
         </Button>
 
+        <!-- Used Fields Section -->
+        <div v-if="usedFields.length > 0" class="space-y-2 pt-3 border-t">
+          <Label class="text-xs text-muted-foreground">Used Fields in Report</Label>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              v-for="field in categorizedFields"
+              :key="field.name"
+              :class="getFieldColorClass(field.type)"
+              class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border"
+              :title="`${field.type === 'computed' ? 'Computed' : field.type === 'ingested' ? 'Ingested' : 'Unknown'} field`"
+            >
+              {{ field.name }}
+            </span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-muted-foreground pt-1">
+            <div class="flex items-center gap-1">
+              <div class="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>Computed</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <div class="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <span>Ingested</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Widget Actions (Edit Mode) -->
         <div v-if="isEditMode" class="space-y-3">
           <!-- Chart Widgets -->
@@ -435,6 +461,10 @@ const props = defineProps({
   isOpen: {
     type: Boolean,
     default: false
+  },
+  widgets: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -479,6 +509,55 @@ const currencyFields = computed(() => {
   console.log('  ⚠️ Using fallback detection, found:', detectedFields)
   return detectedFields
 })
+
+// Extract all fields used in the report
+const usedFields = computed(() => {
+  const fields = new Set()
+  
+  props.widgets.forEach(widget => {
+    if (widget.config) {
+      // Chart and stats widgets
+      if (widget.config.x_field) fields.add(widget.config.x_field)
+      if (widget.config.y_field) fields.add(widget.config.y_field)
+      if (widget.config.currency_field) fields.add(widget.config.currency_field)
+      
+      // Table widgets - track all columns
+      if (widget.config.columns && Array.isArray(widget.config.columns)) {
+        widget.config.columns.forEach(col => {
+          if (col.field || col.key || col.value) {
+            fields.add(col.field || col.key || col.value)
+          }
+        })
+      }
+      
+      // Any other field references
+      if (widget.config.field) fields.add(widget.config.field)
+      if (widget.config.fields && Array.isArray(widget.config.fields)) {
+        widget.config.fields.forEach(f => fields.add(f))
+      }
+    }
+  })
+  
+  return Array.from(fields).sort()
+})
+
+// Categorize fields
+const categorizedFields = computed(() => {
+  const ingestedFields = Object.keys(props.metadata.ingested_columns || {})
+  const computedFields = Object.keys(props.metadata.computed_columns || {})
+  
+  return usedFields.value.map(field => ({
+    name: field,
+    type: computedFields.includes(field) ? 'computed' : 
+          ingestedFields.includes(field) ? 'ingested' : 'unknown'
+  }))
+})
+
+const getFieldColorClass = (type) => {
+  if (type === 'computed') return 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+  if (type === 'ingested') return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20'
+  return 'bg-muted text-muted-foreground'
+}
 
 // Watch for selectedWidget changes and update localConfig
 watch(() => props.selectedWidget, (newWidget) => {

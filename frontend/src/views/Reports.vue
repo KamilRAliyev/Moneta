@@ -122,6 +122,7 @@
         :is-open="sidebarOpen"
         :selected-widget="selectedWidget"
         :metadata="metadata"
+        :widgets="layout"
         @toggle-mode="toggleMode"
         @add-widget="addWidget"
         @update-widget-config="updateWidgetConfigFromToolbar"

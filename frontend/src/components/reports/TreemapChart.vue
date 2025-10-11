@@ -38,13 +38,21 @@ const createChart = () => {
 
   if (width <= 0 || height <= 0) return
 
-  // Prepare hierarchical data
+  // Prepare hierarchical data - filter out very small items (< 0.5% of total)
+  const totalValue = d3.sum(props.data.values, d => Math.abs(d))
+  const threshold = totalValue * 0.005 // 0.5% threshold
+  
+  const children = props.data.labels
+    .map((label, i) => ({
+      name: label,
+      value: Math.abs(props.data.values[i])
+    }))
+    .filter(item => item.value >= threshold) // Filter out very small items
+    .sort((a, b) => b.value - a.value)
+  
   const hierarchyData = {
     name: 'root',
-    children: props.data.labels.map((label, i) => ({
-      name: label,
-      value: Math.abs(props.data.values[i]) // Use absolute values for size
-    }))
+    children: children
   }
 
   // Create SVG
@@ -58,11 +66,12 @@ const createChart = () => {
     .sum(d => d.value)
     .sort((a, b) => b.value - a.value)
 
-  // Create treemap layout with more padding
+  // Create treemap layout with better algorithm for aspect ratios
   const treemap = d3.treemap()
     .size([width, height])
-    .padding(4) // Increased padding for better separation
+    .padding(6)
     .round(true)
+    .tile(d3.treemapResquarify.ratio(2)) // Better aspect ratios, avoids very narrow tiles
 
   treemap(root)
 
@@ -98,12 +107,21 @@ const createChart = () => {
       .attr('stop-opacity', 0.75)
   })
 
-  // Create cells
+  // Create cells with clipPath to prevent overflow
   const cell = svg.selectAll('g')
     .data(root.leaves())
     .enter()
     .append('g')
     .attr('transform', d => `translate(${d.x0},${d.y0})`)
+
+  // Add clip path for each cell to prevent text overflow
+  cell.append('clipPath')
+    .attr('id', (d, i) => `clip-${i}`)
+    .append('rect')
+    .attr('width', d => Math.max(0, d.x1 - d.x0))
+    .attr('height', d => Math.max(0, d.y1 - d.y0))
+    .attr('rx', 8)
+    .attr('ry', 8)
 
   // Add rectangles with rounded corners and gradients - faster animation
   cell.append('rect')
@@ -124,22 +142,32 @@ const createChart = () => {
     .attr('opacity', 1)
 
   // Add labels with enhanced styling - faster animation
+  // Only show labels if tile is large enough
   cell.append('text')
+    .attr('clip-path', (d, i) => `url(#clip-${i})`)
     .attr('x', 10)
-    .attr('y', 22)
+    .attr('y', 20)
     .style('font-size', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? '15px' : width > 60 ? '13px' : '11px'
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 40) return '0px' // Hide if too small
+      return width > 150 ? '14px' : width > 100 ? '12px' : '10px'
     })
-    .style('font-weight', '700')
+    .style('font-weight', '600')
     .style('fill', 'white')
-    .style('text-shadow', '0 2px 4px rgba(0,0,0,0.5)')
+    .style('text-shadow', '0 1px 3px rgba(0,0,0,0.6)')
+    .style('pointer-events', 'none')
     .text(d => {
       const width = d.x1 - d.x0
-      const maxLength = width > 100 ? 20 : width > 60 ? 12 : 8
-      return d.data.name.length > maxLength 
-        ? d.data.name.substring(0, maxLength) + '...' 
-        : d.data.name
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 40) return '' // Hide if too small
+      
+      // Calculate max characters based on width
+      const maxChars = Math.floor((width - 20) / 7) // Approximate 7px per char
+      if (d.data.name.length > maxChars) {
+        return d.data.name.substring(0, Math.max(3, maxChars - 3)) + '...'
+      }
+      return d.data.name
     })
     .attr('opacity', 0)
     .transition()
@@ -149,19 +177,29 @@ const createChart = () => {
 
   // Add values with enhanced typography - faster animation
   cell.append('text')
+    .attr('clip-path', (d, i) => `url(#clip-${i})`)
     .attr('x', 10)
     .attr('y', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? 44 : width > 60 ? 34 : 28
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 40) return 0 // Hide if too small
+      return width > 150 ? 40 : width > 100 ? 36 : 30
     })
     .style('font-size', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? '20px' : width > 60 ? '16px' : '12px'
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 40) return '0px' // Hide if too small
+      return width > 150 ? '18px' : width > 100 ? '15px' : '11px'
     })
-    .style('font-weight', '800')
+    .style('font-weight', '700')
     .style('fill', 'white')
-    .style('text-shadow', '0 2px 4px rgba(0,0,0,0.5)')
+    .style('text-shadow', '0 1px 3px rgba(0,0,0,0.6)')
+    .style('pointer-events', 'none')
     .text(d => {
+      const width = d.x1 - d.x0
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 40) return '' // Hide if too small
+      
       const useCompact = props.config.compactNumbers !== false
       if (props.data.currencyCode) {
         return formatCurrency(d.value, props.data.currencyCode, { compact: useCompact })
@@ -180,17 +218,28 @@ const createChart = () => {
   // Add percentage labels with enhanced styling - faster animation
   const total = d3.sum(props.data.values, d => Math.abs(d))
   cell.append('text')
+    .attr('clip-path', (d, i) => `url(#clip-${i})`)
     .attr('x', 10)
     .attr('y', d => {
       const width = d.x1 - d.x0
       const height = d.y1 - d.y0
-      return height > 60 ? (width > 100 ? 64 : 50) : height - 12
+      if (width < 60 || height < 60) return 0 // Hide if too small for 3 lines
+      return width > 150 ? 58 : width > 100 ? 50 : 44
     })
-    .style('font-size', '12px')
+    .style('font-size', d => {
+      const width = d.x1 - d.x0
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 60) return '0px' // Hide if too small
+      return '11px'
+    })
     .style('font-weight', '600')
-    .style('fill', 'rgba(255,255,255,0.85)')
-    .style('text-shadow', '0 2px 3px rgba(0,0,0,0.4)')
+    .style('fill', 'rgba(255,255,255,0.8)')
+    .style('text-shadow', '0 1px 3px rgba(0,0,0,0.5)')
+    .style('pointer-events', 'none')
     .text(d => {
+      const width = d.x1 - d.x0
+      const height = d.y1 - d.y0
+      if (width < 60 || height < 60) return '' // Hide if too small
       const percentage = ((d.value / total) * 100).toFixed(1)
       return `${percentage}%`
     })
@@ -248,8 +297,45 @@ const createChart = () => {
             <div style="font-size: 12px; opacity: 0.8;">${percentage}% of total</div>
           `
         })
-        .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
-        .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
+      
+      // Smart positioning: adjust tooltip to stay within bounds
+      const containerRect = chartContainer.value.getBoundingClientRect()
+      const mouseX = event.pageX - containerRect.left
+      const mouseY = event.pageY - containerRect.top
+      
+      // Get tooltip dimensions after rendering
+      const tooltipNode = tooltip.node()
+      const tooltipRect = tooltipNode.getBoundingClientRect()
+      const tooltipWidth = tooltipRect.width
+      const tooltipHeight = tooltipRect.height
+      
+      // Calculate position with smart bounds checking
+      let left = mouseX + 15
+      let top = mouseY - tooltipHeight / 2
+      
+      // Flip horizontally if tooltip would go outside right edge
+      if (left + tooltipWidth > containerRect.width) {
+        left = mouseX - tooltipWidth - 15
+      }
+      
+      // Flip vertically if tooltip would go outside bottom edge
+      if (top + tooltipHeight > containerRect.height) {
+        top = containerRect.height - tooltipHeight - 10
+      }
+      
+      // Keep tooltip above top edge
+      if (top < 10) {
+        top = 10
+      }
+      
+      // Keep tooltip from going off left edge
+      if (left < 10) {
+        left = 10
+      }
+      
+      tooltip
+        .style('left', `${left}px`)
+        .style('top', `${top}px`)
     })
     .on('mouseout', function() {
       const parent = d3.select(this.parentNode)
