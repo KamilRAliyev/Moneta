@@ -6,12 +6,13 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ labels: [], values: [] })
+    default: () => ({ labels: [], values: [], isCurrencyGrouped: false, currencyCode: null })
   },
   config: {
     type: Object,
@@ -25,6 +26,9 @@ const { chartColors, textColor, borderColor } = useChartTheme()
 let resizeObserver = null
 
 const createChart = () => {
+  console.log('📊 BarChart createChart called with data:', props.data)
+  console.log('  💰 Currency code from data:', props.data.currencyCode)
+  
   if (!chartContainer.value || !props.data.labels || props.data.labels.length === 0) {
     return
   }
@@ -67,9 +71,19 @@ const createChart = () => {
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
 
-  // Add Y axis
+  // Add Y axis with currency formatting if applicable
+  const useCompact = props.config.compactNumbers !== false // Default to true for axis labels
+  const yAxisFormat = props.data.currencyCode ? 
+    (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
+    (d) => {
+      if (useCompact && Math.abs(d) >= 1000) {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+      }
+      return d.toLocaleString()
+    }
+    
   svg.append('g')
-    .call(d3.axisLeft(y))
+    .call(d3.axisLeft(y).tickFormat(yAxisFormat))
     .selectAll('text')
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
@@ -111,6 +125,11 @@ const createChart = () => {
       .attr('opacity', 0.8)
       .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.2)) brightness(1.05)')
 
+    // Format value for tooltip (tooltips always show full precision)
+    const formattedValue = props.data.currencyCode ?
+      formatCurrency(d, props.data.currencyCode, { compact: false }) :
+      d.toLocaleString()
+    
     // Create Revolut-style tooltip
     const tooltip = d3.select(chartContainer.value)
       .append('div')
@@ -125,7 +144,7 @@ const createChart = () => {
       .style('pointer-events', 'none')
       .style('z-index', '1000')
       .style('box-shadow', '0 4px 12px rgba(0,0,0,0.3)')
-      .html(`<div style="font-weight: 600; margin-bottom: 2px;">${props.data.labels[index]}</div><div>Value: <strong>${d.toLocaleString()}</strong></div>`)
+      .html(`<div style="font-weight: 600; margin-bottom: 2px;">${props.data.labels[index]}</div><div>Value: <strong>${formattedValue}</strong></div>`)
       .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
       .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
   })

@@ -6,12 +6,13 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ labels: [], values: [] })
+    default: () => ({ labels: [], values: [], currencyCode: null })
   },
   config: {
     type: Object,
@@ -79,8 +80,8 @@ const createChart = () => {
 
   // Add rectangles with rounded corners
   cell.append('rect')
-    .attr('width', d => d.x1 - d.x0)
-    .attr('height', d => d.y1 - d.y0)
+    .attr('width', d => Math.max(0, d.x1 - d.x0)) // Ensure non-negative
+    .attr('height', d => Math.max(0, d.y1 - d.y0)) // Ensure non-negative
     .attr('fill', d => colorScale(d.data.name))
     .attr('rx', 6)
     .attr('ry', 6)
@@ -130,7 +131,16 @@ const createChart = () => {
     .style('font-weight', 'bold')
     .style('fill', 'white')
     .style('text-shadow', '0 1px 2px rgba(0,0,0,0.3)')
-    .text(d => d.value.toLocaleString())
+    .text(d => {
+      const useCompact = props.config.compactNumbers !== false // Default to true
+      if (props.data.currencyCode) {
+        return formatCurrency(d.value, props.data.currencyCode, { compact: useCompact })
+      } else if (useCompact && Math.abs(d.value) >= 1000) {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d.value)
+      } else {
+        return d.value.toLocaleString()
+      }
+    })
     .attr('opacity', 0)
     .transition()
     .duration(800)
@@ -185,11 +195,20 @@ const createChart = () => {
         .style('pointer-events', 'none')
         .style('z-index', '1000')
         .style('box-shadow', '0 4px 12px rgba(0,0,0,0.3)')
-        .html(`
-          <div style="font-weight: 600; margin-bottom: 4px;">${d.data.name}</div>
-          <div>Value: <strong>${d.value.toLocaleString()}</strong></div>
-          <div>Percentage: <strong>${percentage}%</strong></div>
-        `)
+        .html(() => {
+          // Tooltips always show full precision
+          let formattedValue
+          if (props.data.currencyCode) {
+            formattedValue = formatCurrency(d.value, props.data.currencyCode, { compact: false })
+          } else {
+            formattedValue = d.value.toLocaleString()
+          }
+          return `
+            <div style="font-weight: 600; margin-bottom: 4px;">${d.data.name}</div>
+            <div>Value: <strong>${formattedValue}</strong></div>
+            <div>Percentage: <strong>${percentage}%</strong></div>
+          `
+        })
         .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
         .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
     })

@@ -6,15 +6,6 @@
       <div class="flex items-center space-x-1">
         <Button
           v-if="isEditMode"
-          @click="toggleConfig"
-          variant="ghost"
-          size="sm"
-          :title="showConfig ? 'Hide config' : 'Show config'"
-        >
-          <Settings class="w-4 h-4" />
-        </Button>
-        <Button
-          v-if="isEditMode"
           @click="$emit('remove')"
           variant="ghost"
           size="sm"
@@ -25,116 +16,6 @@
         </Button>
       </div>
     </div>
-
-    <!-- Configuration Panel -->
-    <Card v-if="showConfig && isEditMode" class="mb-3 flex-shrink-0">
-      <CardContent class="p-4">
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <Label class="block text-sm font-medium mb-1">Title</Label>
-            <Input v-model="localConfig.title" type="text" />
-          </div>
-          
-          <div>
-            <Label class="block text-sm font-medium mb-1">Chart Type</Label>
-            <Select v-model="localConfig.chartType">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bar">Bar Chart</SelectItem>
-                <SelectItem value="line">Line Chart</SelectItem>
-                <SelectItem value="multiline">Multi-Line Chart</SelectItem>
-                <SelectItem value="area">Area Chart</SelectItem>
-                <SelectItem value="donut">Donut Chart</SelectItem>
-                <SelectItem value="treemap">Treemap</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div>
-            <Label class="block text-sm font-medium mb-1">Aggregation</Label>
-            <Select v-model="localConfig.aggregation">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sum">Sum</SelectItem>
-                <SelectItem value="avg">Average</SelectItem>
-                <SelectItem value="count">Count</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div>
-            <Label class="block text-sm font-medium mb-1">X Field (Group By)</Label>
-            <Select v-model="localConfig.x_field">
-              <SelectTrigger>
-                <SelectValue placeholder="Select field..." />
-              </SelectTrigger>
-              <SelectContent>
-                <div v-if="availableFields.ingested.length > 0">
-                  <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Ingested Columns</div>
-                  <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
-                    {{ field }}
-                  </SelectItem>
-                </div>
-                <div v-if="availableFields.computed.length > 0">
-                  <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Computed Columns</div>
-                  <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
-                    {{ field }}
-                  </SelectItem>
-                </div>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div>
-            <Label class="block text-sm font-medium mb-1">Y Field (Aggregate)</Label>
-            <Select v-model="localConfig.y_field">
-              <SelectTrigger>
-                <SelectValue placeholder="Select field..." />
-              </SelectTrigger>
-              <SelectContent>
-                <div v-if="availableFields.ingested.length > 0">
-                  <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Ingested Columns</div>
-                  <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
-                    {{ field }}
-                  </SelectItem>
-                </div>
-                <div v-if="availableFields.computed.length > 0">
-                  <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Computed Columns</div>
-                  <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
-                    {{ field }}
-                  </SelectItem>
-                </div>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <!-- Legend Toggle -->
-          <div v-if="localConfig.chartType === 'donut'" class="col-span-2 flex items-center space-x-2">
-            <Checkbox 
-              :checked="localConfig.showLegend !== false" 
-              @update:checked="(val) => localConfig.showLegend = val"
-              id="show-legend"
-            />
-            <Label for="show-legend" class="text-sm font-medium cursor-pointer">
-              Show Legend
-            </Label>
-          </div>
-          
-          <div class="col-span-2 flex items-end justify-end space-x-2">
-            <Button @click="cancelConfig" variant="outline" size="sm">
-              Cancel
-            </Button>
-            <Button @click="saveConfig" size="sm">
-              Apply
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
 
     <!-- Chart Container -->
     <div class="flex-1 min-h-0 relative">
@@ -163,7 +44,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { Settings, X } from 'lucide-vue-next'
+import { X } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import BarChart from './BarChart.vue'
 import LineChart from './LineChart.vue'
@@ -172,11 +53,6 @@ import AreaChart from './AreaChart.vue'
 import TreemapChart from './TreemapChart.vue'
 import MultiLineChart from './MultiLineChart.vue'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 
 const props = defineProps({
   config: {
@@ -200,7 +76,6 @@ const props = defineProps({
 const emit = defineEmits(['config-updated', 'remove'])
 
 // Reactive data
-const showConfig = ref(false)
 const localConfig = reactive({ ...props.config })
 const chartData = ref({ labels: [], values: [] })
 const loading = ref(false)
@@ -233,24 +108,9 @@ const chartComponent = computed(() => {
 })
 
 // Methods
-const toggleConfig = () => {
-  showConfig.value = !showConfig.value
-}
-
-const saveConfig = () => {
-  emit('config-updated', { ...localConfig })
-  showConfig.value = false
-  fetchChartData()
-}
-
-const cancelConfig = () => {
-  Object.assign(localConfig, props.config)
-  showConfig.value = false
-}
-
 const fetchChartData = async () => {
   if (!localConfig.x_field || !localConfig.y_field) {
-    chartData.value = { labels: [], values: [] }
+    chartData.value = { labels: [], values: [], isCurrencyGrouped: false }
     return
   }
 
@@ -265,6 +125,7 @@ const fetchChartData = async () => {
     }
     
     console.log('📊 ChartWidget fetching data...')
+    console.log('  ⚙️ localConfig:', localConfig)
     console.log('  - props.dateRange:', props.dateRange)
     console.log('  - dateRange.from:', props.dateRange?.from)
     console.log('  - dateRange.to:', props.dateRange?.to)
@@ -283,17 +144,55 @@ const fetchChartData = async () => {
       console.log('  ✅ Added date_field:', params.date_field)
     }
     
+    // Add currency configuration
+    if (localConfig.currency_mode === 'field' && localConfig.currency_field) {
+      params.currency_field = localConfig.currency_field
+      params.split_by_currency = localConfig.split_by_currency || false
+      console.log('  ✅ Added currency_field:', params.currency_field)
+      console.log('  ✅ Split by currency:', params.split_by_currency)
+    }
+    
     console.log('  - Final params:', params)
     
     const response = await reportsApi.getAggregatedData(params)
-    chartData.value = {
-      labels: response.data.labels || [],
-      values: response.data.values || []
+    
+    // Handle different response formats
+    if (response.data.split_by_currency && response.data.values_by_currency) {
+      // Multi-currency grouped data
+      chartData.value = {
+        labels: response.data.labels || [],
+        valuesByCurrency: response.data.values_by_currency || {},
+        currencies: response.data.currencies || [],
+        isCurrencyGrouped: true,
+        currencyCode: null // Multiple currencies
+      }
+      console.log('  📊 Multi-currency data:', chartData.value)
+    } else {
+      // Single series data
+      // Determine currency code for formatting
+      let currencyCode = null
+      if (localConfig.currency_mode === 'fixed' && localConfig.currency_code) {
+        currencyCode = localConfig.currency_code
+        console.log('  💰 Using fixed currency:', currencyCode)
+      } else if (localConfig.currency_mode === 'field' && localConfig.currency_field) {
+        // For field mode, we need to assume USD if field is set but not grouping
+        // In the future, we could fetch the first transaction's currency value
+        currencyCode = 'USD' // Default assumption when using field mode
+        console.log('  💰 Using field mode, defaulting to USD (field:', localConfig.currency_field, ')')
+      }
+      
+      chartData.value = {
+        labels: response.data.labels || [],
+        values: response.data.values || [],
+        isCurrencyGrouped: false,
+        currencyCode: currencyCode
+      }
+      console.log('  📊 Single series data with currency:', currencyCode)
     }
   } catch (err) {
     console.error('Failed to fetch chart data:', err)
     error.value = err.response?.data?.detail || 'Failed to load chart data'
-    chartData.value = { labels: [], values: [] }
+    chartData.value = { labels: [], values: [], isCurrencyGrouped: false }
   } finally {
     loading.value = false
   }
@@ -301,9 +200,17 @@ const fetchChartData = async () => {
 
 // Watchers
 watch(() => props.config, (newConfig) => {
+  console.log('📋 ChartWidget: Config changed, updating localConfig and refetching')
   Object.assign(localConfig, newConfig)
   fetchChartData()
 }, { deep: true })
+
+// Watch for currency config changes specifically
+watch(() => [localConfig.currency_mode, localConfig.currency_field, localConfig.currency_code, localConfig.compactNumbers], () => {
+  console.log('💰 ChartWidget: Currency/format config changed, refetching data')
+  console.log('  - compactNumbers:', localConfig.compactNumbers)
+  fetchChartData()
+})
 
 // Watch for date range changes - watch both properties
 watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [oldFrom, oldTo]) => {
@@ -316,6 +223,12 @@ watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [ol
 // Lifecycle
 onMounted(() => {
   console.log('🔥 ChartWidget MOUNTED with dateRange:', props.dateRange)
+  console.log('🔥 ChartWidget currency config:', {
+    currency_mode: localConfig.currency_mode,
+    currency_field: localConfig.currency_field,
+    currency_code: localConfig.currency_code,
+    compactNumbers: localConfig.compactNumbers
+  })
   fetchChartData()
 })
 </script>

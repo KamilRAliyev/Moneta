@@ -60,13 +60,17 @@ const props = defineProps({
     type: Object,
     default: () => ({ from: null, to: null, dateField: 'date' })
   },
+  preset: {
+    type: String,
+    default: 'allTime'
+  },
   metadata: {
     type: Object,
     default: () => ({ ingested_columns: {}, computed_columns: {} })
   }
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'update:preset'])
 
 const selectedPreset = ref('allTime')
 const selectedDateField = ref('date')
@@ -76,6 +80,9 @@ const localTo = ref('')
 // Extract date-related fields from metadata
 const dateFields = computed(() => {
   const fields = []
+  
+  // Always include 'date' as the first option
+  fields.push('date')
   
   // Get all column names from metadata
   const allColumns = [
@@ -88,17 +95,15 @@ const dateFields = computed(() => {
   
   allColumns.forEach(col => {
     const lowerCol = col.toLowerCase()
+    // Skip if it's exactly 'date' (already added)
+    if (col === 'date') return
+    
     if (dateKeywords.some(keyword => lowerCol.includes(keyword))) {
       if (!fields.includes(col)) {
         fields.push(col)
       }
     }
   })
-  
-  // If no date fields found, add 'date' as default
-  if (fields.length === 0) {
-    fields.push('date')
-  }
   
   return fields
 })
@@ -110,6 +115,9 @@ const getDateString = (date) => {
 const applyPreset = (preset) => {
   const today = new Date()
   let from, to
+
+  // Emit preset change
+  emit('update:preset', preset)
 
   switch (preset) {
     case 'today':
@@ -171,29 +179,76 @@ const emitChange = () => {
   emit('update:modelValue', { from: current.from, to: current.to, dateField: selectedDateField.value })
 }
 
-// Watch for metadata changes and initialize date field
+// Watch for modelValue.dateField changes (when parent updates it from loaded report)
+// This takes HIGHEST priority - always respect parent's dateField
+watch(() => props.modelValue?.dateField, (newDateField, oldDateField) => {
+  console.log('📅 DateRangePicker modelValue.dateField watch triggered!')
+  console.log('  - Old:', oldDateField)
+  console.log('  - New:', newDateField)
+  console.log('  - Current selectedDateField:', selectedDateField.value)
+  
+  if (newDateField) {
+    console.log('📅 DateRangePicker: Setting dateField to:', newDateField)
+    selectedDateField.value = newDateField
+    console.log('📅 DateRangePicker: After update, selectedDateField.value is:', selectedDateField.value)
+  } else {
+    console.log('📅 DateRangePicker: newDateField is falsy, not updating')
+  }
+}, { immediate: true })
+
+// Watch for metadata changes and initialize date field ONLY if parent hasn't provided one
 watch(() => props.metadata, (newMetadata) => {
+  // ALWAYS check if parent has provided a dateField first (check the actual current value)
+  const parentDateField = props.modelValue?.dateField
+  
+  // If parent has ANY dateField (including 'date'), respect it and skip auto-select
+  if (parentDateField) {
+    console.log('📅 DateRangePicker: Skipping auto-select, parent provided:', parentDateField)
+    // Make sure our local value matches parent
+    if (selectedDateField.value !== parentDateField) {
+      console.log('📅 DateRangePicker: Syncing local value to parent:', parentDateField)
+      selectedDateField.value = parentDateField
+    }
+    return
+  }
+  
   if (newMetadata && Object.keys(newMetadata.ingested_columns || {}).length > 0) {
-    // Initialize selectedDateField if not already set
-    if (!selectedDateField.value || selectedDateField.value === 'date') {
-      if (dateFields.value.length > 0) {
-        selectedDateField.value = dateFields.value[0]
-      }
+    // Only auto-select if parent hasn't provided ANY dateField
+    if (!parentDateField && selectedDateField.value === 'date' && dateFields.value.length > 0) {
+      console.log('📅 DateRangePicker: Auto-selecting first date field:', dateFields.value[0])
+      selectedDateField.value = dateFields.value[0]
+      // Emit the change
+      emitChange()
     }
   }
-}, { immediate: true, deep: true })
+}, { immediate: false, deep: true })
+
+// Watch for preset prop changes
+watch(() => props.preset, (newPreset) => {
+  if (newPreset) {
+    selectedPreset.value = newPreset
+  }
+}, { immediate: true })
 
 // Initialize with all time and emit the initial value
 onMounted(() => {
-  // Initialize selectedDateField from props or use first available date field
-  if (props.modelValue?.dateField) {
-    selectedDateField.value = props.modelValue.dateField
-  } else if (dateFields.value.length > 0) {
-    selectedDateField.value = dateFields.value[0]
+  console.log('📅 DateRangePicker onMounted, props.modelValue:', props.modelValue)
+  console.log('📅 DateRangePicker onMounted, props.preset:', props.preset)
+  
+  // Initialize selectedPreset from props
+  if (props.preset) {
+    selectedPreset.value = props.preset
   }
   
+  // ONLY initialize from props, never auto-select here
+  // The metadata watcher will handle auto-selection if needed
+  if (props.modelValue?.dateField) {
+    console.log('📅 DateRangePicker onMounted: Using dateField from props:', props.modelValue.dateField)
+    selectedDateField.value = props.modelValue.dateField
+  }
+  // Do NOT auto-select the first date field here!
+  
   if (!props.modelValue || (!props.modelValue.from && !props.modelValue.to)) {
-    selectedPreset.value = 'allTime'
     // Emit the initial "all time" value with selected date field
     emit('update:modelValue', { from: null, to: null, dateField: selectedDateField.value })
   }

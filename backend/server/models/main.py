@@ -72,6 +72,7 @@ class Report(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     widgets: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    filters: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 

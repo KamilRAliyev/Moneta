@@ -6,12 +6,13 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ labels: [], values: [] })
+    default: () => ({ labels: [], values: [], isCurrencyGrouped: false, currencyCode: null })
   },
   config: {
     type: Object,
@@ -73,9 +74,19 @@ const createChart = () => {
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
 
-  // Add Y axis
+  // Add Y axis with currency formatting if applicable
+  const useCompact = props.config.compactNumbers !== false // Default to true for axis labels
+  const yAxisFormat = props.data.currencyCode ? 
+    (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
+    (d) => {
+      if (useCompact && Math.abs(d) >= 1000) {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+      }
+      return d.toLocaleString()
+    }
+    
   svg.append('g')
-    .call(d3.axisLeft(y))
+    .call(d3.axisLeft(y).tickFormat(yAxisFormat))
     .selectAll('text')
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
@@ -87,16 +98,75 @@ const createChart = () => {
   svg.selectAll('.tick line')
     .style('stroke', borderColor.value || '#cccccc')
 
-  // Add grid lines
+  // Add subtle horizontal grid lines only
   svg.append('g')
     .attr('class', 'grid')
-    .attr('opacity', 0.1)
+    .attr('opacity', 0.05)
     .call(d3.axisLeft(y)
       .tickSize(-width)
       .tickFormat('')
     )
     .selectAll('line')
     .style('stroke', borderColor.value || '#cccccc')
+    .style('stroke-dasharray', '2,2')
+
+  const primaryColor = chartColors.value[0] || '#0075FF'
+
+  // Add gradient definition
+  const defs = svg.append('defs')
+  
+  const gradient = defs.append('linearGradient')
+    .attr('id', `area-gradient-${Math.random().toString(36).substr(2, 9)}`)
+    .attr('x1', '0%')
+    .attr('y1', '0%')
+    .attr('x2', '0%')
+    .attr('y2', '100%')
+  
+  gradient.append('stop')
+    .attr('offset', '0%')
+    .attr('stop-color', primaryColor)
+    .attr('stop-opacity', 0.3)
+  
+  gradient.append('stop')
+    .attr('offset', '100%')
+    .attr('stop-color', primaryColor)
+    .attr('stop-opacity', 0)
+
+  // Add drop shadow filter for line glow
+  const filter = defs.append('filter')
+    .attr('id', `glow-${Math.random().toString(36).substr(2, 9)}`)
+    .attr('height', '300%')
+    .attr('width', '300%')
+    .attr('x', '-75%')
+    .attr('y', '-75%')
+  
+  filter.append('feGaussianBlur')
+    .attr('stdDeviation', '2')
+    .attr('result', 'coloredBlur')
+  
+  const feMerge = filter.append('feMerge')
+  feMerge.append('feMergeNode').attr('in', 'coloredBlur')
+  feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+
+  // Create area generator for gradient fill
+  const area = d3.area()
+    .x(d => x(d.label))
+    .y0(height)
+    .y1(d => y(d.value))
+    .curve(d3.curveMonotoneX)
+
+  // Add the area (gradient fill)
+  const areaPath = svg.append('path')
+    .datum(data)
+    .attr('fill', `url(#${gradient.attr('id')})`)
+    .attr('d', area)
+    .attr('opacity', 0)
+
+  // Animate area
+  areaPath.transition()
+    .duration(800)
+    .delay(200)
+    .attr('opacity', 1)
 
   // Create line generator
   const line = d3.line()
@@ -104,12 +174,15 @@ const createChart = () => {
     .y(d => y(d.value))
     .curve(d3.curveMonotoneX) // Smooth curve
 
-  // Add the line path
+  // Add the line path with enhanced styling
   const path = svg.append('path')
     .datum(data)
     .attr('fill', 'none')
-    .attr('stroke', chartColors.value[0] || '#0075FF')
-    .attr('stroke-width', 2)
+    .attr('stroke', primaryColor)
+    .attr('stroke-width', 3)
+    .attr('stroke-linecap', 'round')
+    .attr('stroke-linejoin', 'round')
+    .attr('filter', `url(#${filter.attr('id')})`)
     .attr('d', line)
 
   // Animate the line
@@ -118,11 +191,11 @@ const createChart = () => {
     .attr('stroke-dasharray', totalLength + ' ' + totalLength)
     .attr('stroke-dashoffset', totalLength)
     .transition()
-    .duration(1000)
-    .ease(d3.easeLinear)
+    .duration(1200)
+    .ease(d3.easeQuadOut)
     .attr('stroke-dashoffset', 0)
 
-  // Add dots
+  // Add dots (subtle initially)
   const dots = svg.selectAll('.dot')
     .data(data)
     .enter()
@@ -131,36 +204,50 @@ const createChart = () => {
     .attr('cx', d => x(d.label))
     .attr('cy', d => y(d.value))
     .attr('r', 0)
-    .attr('fill', chartColors.value[0] || '#0075FF')
+    .attr('fill', primaryColor)
     .attr('stroke', 'white')
     .attr('stroke-width', 2)
+    .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))')
 
-  // Animate dots
+  // Animate dots to subtle size
   dots.transition()
-    .delay((d, i) => i * 50)
+    .delay((d, i) => 1000 + i * 50)
     .duration(300)
-    .attr('r', 5)
+    .attr('r', 4)
 
-  // Add tooltips
+  // Add tooltips with enhanced hover
   dots.on('mouseover', function(event, d) {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('r', 7)
+      .attr('r', 8)
+      .attr('stroke-width', 3)
 
-    // Create tooltip
+    // Format value for tooltip (tooltips always show full precision)
+    const formattedValue = props.data.currencyCode ?
+      formatCurrency(d.value, props.data.currencyCode, { compact: false }) :
+      d.value.toLocaleString()
+
+    // Create tooltip with modern styling
     const tooltip = d3.select(chartContainer.value)
       .append('div')
       .attr('class', 'chart-tooltip')
       .style('position', 'absolute')
-      .style('background', 'rgba(0, 0, 0, 0.8)')
+      .style('background', 'rgba(0, 0, 0, 0.85)')
+      .style('backdrop-filter', 'blur(10px)')
       .style('color', 'white')
-      .style('padding', '8px')
-      .style('border-radius', '4px')
-      .style('font-size', '12px')
+      .style('padding', '12px 16px')
+      .style('border-radius', '12px')
+      .style('font-size', '13px')
+      .style('font-weight', '500')
       .style('pointer-events', 'none')
       .style('z-index', '1000')
-      .html(`<strong>${d.label}</strong><br/>Value: ${d.value.toLocaleString()}`)
+      .style('box-shadow', '0 8px 16px rgba(0,0,0,0.3)')
+      .style('border', '1px solid rgba(255,255,255,0.1)')
+      .html(`
+        <div style="margin-bottom: 4px; font-size: 11px; opacity: 0.7;">${d.label}</div>
+        <div style="font-size: 16px; font-weight: 600;">${formattedValue}</div>
+      `)
       .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
       .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
   })
@@ -168,7 +255,8 @@ const createChart = () => {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('r', 5)
+      .attr('r', 4)
+      .attr('stroke-width', 2)
 
     d3.select(chartContainer.value).selectAll('.chart-tooltip').remove()
   })

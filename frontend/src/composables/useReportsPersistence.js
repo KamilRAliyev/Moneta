@@ -2,10 +2,12 @@ import { ref, watch } from 'vue'
 
 const LAST_VIEWED_KEY = 'moneta_last_viewed_report'
 const DEFAULT_REPORT_KEY = 'moneta_default_report'
+const SIDEBAR_MODE_KEY = 'moneta_sidebar_mode'
 
 export function useReportsPersistence() {
   const lastViewedReportId = ref(null)
   const defaultReportId = ref(null)
+  const sidebarMode = ref('sidebar') // 'sidebar' or 'floating'
 
   // Load from localStorage
   const load = () => {
@@ -18,6 +20,11 @@ export function useReportsPersistence() {
       const defaultReport = localStorage.getItem(DEFAULT_REPORT_KEY)
       if (defaultReport) {
         defaultReportId.value = defaultReport
+      }
+
+      const savedSidebarMode = localStorage.getItem(SIDEBAR_MODE_KEY)
+      if (savedSidebarMode) {
+        sidebarMode.value = savedSidebarMode
       }
     } catch (err) {
       console.warn('Failed to load report persistence:', err)
@@ -88,12 +95,30 @@ export function useReportsPersistence() {
     }
   }
 
+  // Save sidebar mode
+  const setSidebarMode = (mode) => {
+    try {
+      if (mode) {
+        localStorage.setItem(SIDEBAR_MODE_KEY, mode)
+        sidebarMode.value = mode
+      }
+    } catch (err) {
+      console.warn('Failed to save sidebar mode:', err)
+    }
+  }
+
+  // Get sidebar mode
+  const getSidebarMode = () => {
+    return sidebarMode.value
+  }
+
   // Initialize
   load()
 
   return {
     lastViewedReportId,
     defaultReportId,
+    sidebarMode,
     setLastViewedReportId,
     getLastViewedReportId,
     setDefaultReportId,
@@ -101,7 +126,9 @@ export function useReportsPersistence() {
     clearDefaultReport,
     getPreferredReportId,
     isDefaultReport,
-    toggleDefaultReport
+    toggleDefaultReport,
+    setSidebarMode,
+    getSidebarMode
   }
 }
 

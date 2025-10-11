@@ -1,104 +1,17 @@
 <template>
   <div class="h-full flex flex-col">
     <!-- Widget Header -->
-    <div v-if="isEditMode" class="flex items-center justify-between mb-2 flex-shrink-0">
-      <h3 class="text-sm font-medium text-muted-foreground">Stats Widget</h3>
-      <div class="flex items-center space-x-1">
-        <Button
-          @click="toggleConfig"
-          variant="ghost"
-          size="sm"
-          title="Configure widget"
-        >
-          <Settings class="w-4 h-4" />
-        </Button>
-        <Button
-          @click="$emit('remove')"
-          variant="ghost"
-          size="sm"
-          class="text-destructive hover:text-destructive"
-          title="Remove widget"
-        >
-          <X class="w-4 h-4" />
-        </Button>
-      </div>
+    <div v-if="isEditMode" class="flex items-center justify-end mb-2 flex-shrink-0">
+      <Button
+        @click="$emit('remove')"
+        variant="ghost"
+        size="sm"
+        class="text-destructive hover:text-destructive"
+        title="Remove widget"
+      >
+        <X class="w-4 h-4" />
+      </Button>
     </div>
-
-    <!-- Configuration Panel -->
-    <Card v-if="showConfig && isEditMode" class="mb-3 flex-shrink-0">
-      <CardContent class="p-4">
-        <div class="space-y-3">
-          <div>
-            <Label class="block text-sm font-medium mb-1">Metric Label</Label>
-            <Input v-model="localConfig.label" type="text" placeholder="Total Revenue" />
-          </div>
-          
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <Label class="block text-sm font-medium mb-1">Value Field</Label>
-              <Select v-model="localConfig.y_field">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select field..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <div v-if="availableFields.ingested.length > 0">
-                    <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Ingested Columns</div>
-                    <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
-                      {{ field }}
-                    </SelectItem>
-                  </div>
-                  <div v-if="availableFields.computed.length > 0">
-                    <div class="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Computed Columns</div>
-                    <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
-                      {{ field }}
-                    </SelectItem>
-                  </div>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label class="block text-sm font-medium mb-1">Aggregation</Label>
-              <Select v-model="localConfig.aggregation">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sum">Sum</SelectItem>
-                  <SelectItem value="avg">Average</SelectItem>
-                  <SelectItem value="count">Count</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <Label class="block text-sm font-medium mb-1">Color Theme</Label>
-            <Select v-model="localConfig.colorTheme">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="success">Success (Green)</SelectItem>
-                <SelectItem value="warning">Warning (Amber)</SelectItem>
-                <SelectItem value="error">Error (Red)</SelectItem>
-                <SelectItem value="info">Info (Blue)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div class="flex items-end justify-end space-x-2">
-            <Button @click="cancelConfig" variant="outline" size="sm">
-              Cancel
-            </Button>
-            <Button @click="saveConfig" size="sm">
-              Apply
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
 
     <!-- Stats Display -->
     <div class="flex-1 flex items-center justify-center">
@@ -122,13 +35,10 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { X, TrendingUp, TrendingDown, Minus, Settings } from 'lucide-vue-next'
+import { X, TrendingUp, TrendingDown, Minus } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   config: {
@@ -159,13 +69,17 @@ const availableFields = computed(() => {
   }
 })
 
-const showConfig = ref(false)
 const localConfig = reactive({ 
   label: props.config.label || 'Total',
   y_field: props.config.y_field || 'amount',
   aggregation: props.config.aggregation || 'sum',
-  colorTheme: props.config.colorTheme || 'default'
+  colorTheme: props.config.colorTheme || 'default',
+  currency_mode: props.config.currency_mode || 'none',
+  currency_field: props.config.currency_field || null,
+  currency_code: props.config.currency_code || null
 })
+
+console.log('📊 StatsWidget initialized with config:', localConfig)
 
 const statValue = ref(0)
 const trend = ref(null)
@@ -209,28 +123,26 @@ const trendIcon = computed(() => {
 })
 
 const formatValue = (value) => {
+  // Handle count aggregation (no currency)
   if (localConfig.aggregation === 'count') {
     return value.toLocaleString()
   }
+  
+  // Handle currency formatting
+  if (localConfig.currency_mode === 'fixed' && localConfig.currency_code) {
+    console.log('💰 StatsWidget formatting with fixed currency:', localConfig.currency_code)
+    return formatCurrency(value, localConfig.currency_code)
+  } else if (localConfig.currency_mode === 'field' && localConfig.currency_field) {
+    // Default to USD when using field mode without grouping
+    console.log('💰 StatsWidget formatting with field mode, defaulting to USD')
+    return formatCurrency(value, 'USD')
+  }
+  
+  // Default number formatting
   return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   }).format(value)
-}
-
-const toggleConfig = () => {
-  showConfig.value = !showConfig.value
-}
-
-const saveConfig = () => {
-  emit('config-updated', { ...localConfig })
-  showConfig.value = false
-  fetchData()
-}
-
-const cancelConfig = () => {
-  Object.assign(localConfig, props.config)
-  showConfig.value = false
 }
 
 const fetchData = async () => {
@@ -259,6 +171,12 @@ const fetchData = async () => {
       params.date_field = props.dateRange.dateField
     }
     
+    // Add currency configuration (field mode doesn't split, just fetches data)
+    if (localConfig.currency_mode === 'field' && localConfig.currency_field) {
+      params.currency_field = localConfig.currency_field
+      params.split_by_currency = false // Stats widget shows total, not split
+    }
+    
     const response = await reportsApi.getAggregatedData(params)
     
     // Calculate total from all categories
@@ -285,6 +203,12 @@ const fetchData = async () => {
   }
 }
 
+// Watch for config changes
+watch(() => props.config, (newConfig) => {
+  console.log('📋 StatsWidget: Config changed, updating localConfig')
+  Object.assign(localConfig, newConfig)
+}, { deep: true })
+
 // Watch for date range changes - watch both properties
 watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [oldFrom, oldTo]) => {
   console.log('StatsWidget: Date range changed!')
@@ -294,6 +218,7 @@ watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [ol
 })
 
 onMounted(() => {
+  console.log('🔥 StatsWidget MOUNTED, fetching data')
   fetchData()
 })
 </script>

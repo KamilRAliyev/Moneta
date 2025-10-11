@@ -25,12 +25,12 @@ export const useSettingsStore = defineStore('settings', () => {
       const saved = localStorage.getItem('app-settings')
       if (saved) {
         const settings = JSON.parse(saved)
-        return settings.backendUrl || 'http://localhost:8000'
+        return settings.backendUrl || 'http://localhost:8888'
       }
     } catch (error) {
       console.error('Failed to load backend URL:', error)
     }
-    return 'http://localhost:8000'
+    return 'http://localhost:8888'
   }
   
   const backendUrl = ref(getInitialBackendUrl())
@@ -148,7 +148,7 @@ export const useSettingsStore = defineStore('settings', () => {
     localStorage.removeItem('app-settings')
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     setTheme(prefersDark ? 'dark' : 'light')
-    backendUrl.value = 'http://localhost:8000'
+    backendUrl.value = 'http://localhost:8888'
     autoProcess.value = false
     selectedColumns.value = []
     columnWidths.value = {}

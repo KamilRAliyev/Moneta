@@ -143,6 +143,34 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
             if transaction.computed_content:
                 all_computed_columns.update(transaction.computed_content.keys())
         
+        # Detect currency fields
+        currency_fields = []
+        currency_patterns = ['currency', 'curr', 'ccy', 'crncy']
+        common_currencies = {'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR', 'RUB'}
+        currency_symbols = {'$', '€', '£', '¥', '₹', '₽', 'R$', '₩', 'kr', 'zł', '฿', 'Rp', 'RM', '₱', 'R', '₺'}
+        
+        # Check column names for currency patterns
+        all_columns = list(all_ingested_columns) + list(all_computed_columns)
+        for col in all_columns:
+            col_lower = col.lower()
+            if any(pattern in col_lower for pattern in currency_patterns):
+                currency_fields.append(col)
+                continue
+            
+            # Check if column values contain currency codes or symbols
+            has_currency_values = False
+            for transaction in transactions[:100]:  # Sample first 100 transactions
+                content = {**(transaction.ingested_content or {}), **(transaction.computed_content or {})}
+                value = content.get(col)
+                if value and isinstance(value, str):
+                    # Check for currency codes or symbols
+                    if value.upper() in common_currencies or value in currency_symbols:
+                        has_currency_values = True
+                        break
+            
+            if has_currency_values:
+                currency_fields.append(col)
+        
         # Update metadata with collected columns
         meta.ingested_columns = {col: True for col in all_ingested_columns}
         meta.computed_columns = {col: True for col in all_computed_columns}
@@ -152,6 +180,7 @@ async def get_transaction_metadata(db: Session = Depends(lambda: get_db("main"))
         return {
             "ingested_columns": meta.ingested_columns or {},
             "computed_columns": meta.computed_columns or {},
+            "currency_fields": currency_fields,
             "updated_at": meta.updated_at.isoformat() if meta.updated_at else None,
             "created_at": meta.created_at.isoformat() if meta.created_at else None
         }

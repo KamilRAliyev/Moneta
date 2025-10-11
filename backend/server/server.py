@@ -9,14 +9,8 @@ from server.routers.reports import router as reports_router
 
 def create_app() -> FastAPI:
     app = FastAPI()
-    app.include_router(general_router, prefix="/api")
-    app.include_router(statements_router, prefix="/api")
-    app.include_router(transactions_router, prefix="/api")
-    app.include_router(formulas_router, prefix="/api")
-    app.include_router(rules_router, prefix="/api")
-    app.include_router(reports_router, prefix="/api")
     
-    # CORS settings
+    # CORS settings - MUST be added before routers
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Adjust as needed for security
@@ -24,6 +18,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    app.include_router(general_router, prefix="/api")
+    app.include_router(statements_router, prefix="/api")
+    app.include_router(transactions_router, prefix="/api")
+    app.include_router(formulas_router, prefix="/api")
+    app.include_router(rules_router, prefix="/api")
+    app.include_router(reports_router, prefix="/api")
 
     return app
 

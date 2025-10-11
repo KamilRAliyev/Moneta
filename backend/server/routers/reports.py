@@ -4,9 +4,12 @@ from sqlalchemy import func, case, and_, or_
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
+import logging
 
 from server.models.main import Report, Transaction
 from server.services.database import get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -15,11 +18,13 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 class ReportCreate(BaseModel):
     name: str
     widgets: List[Dict[str, Any]] = []
+    filters: Optional[Dict[str, Any]] = None
 
 
 class ReportUpdate(BaseModel):
     name: Optional[str] = None
     widgets: Optional[List[Dict[str, Any]]] = None
+    filters: Optional[Dict[str, Any]] = None
 
 
 class ReportResponse(BaseModel):
@@ -27,6 +32,7 @@ class ReportResponse(BaseModel):
     name: str
     user_id: Optional[str]
     widgets: List[Dict[str, Any]]
+    filters: Optional[Dict[str, Any]]
     created_at: str
     updated_at: str
 
@@ -60,6 +66,7 @@ async def list_reports(
                 name=r.name,
                 user_id=r.user_id,
                 widgets=r.widgets if isinstance(r.widgets, list) else [],
+                filters=r.filters if r.filters else {},
                 created_at=r.created_at.isoformat(),
                 updated_at=r.updated_at.isoformat()
             )
@@ -94,6 +101,7 @@ async def get_report(
             name=report.name,
             user_id=report.user_id,
             widgets=report.widgets if isinstance(report.widgets, list) else [],
+            filters=report.filters if isinstance(report.filters, dict) else {},
             created_at=report.created_at.isoformat(),
             updated_at=report.updated_at.isoformat()
         )
@@ -122,6 +130,7 @@ async def create_report(
         new_report = Report(
             name=report.name,
             widgets=report.widgets,
+            filters=report.filters or {},
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -134,6 +143,7 @@ async def create_report(
             name=new_report.name,
             user_id=new_report.user_id,
             widgets=new_report.widgets if isinstance(new_report.widgets, list) else [],
+            filters=new_report.filters if isinstance(new_report.filters, dict) else {},
             created_at=new_report.created_at.isoformat(),
             updated_at=new_report.updated_at.isoformat()
         )
@@ -160,24 +170,41 @@ async def update_report(
         Updated report
     """
     try:
+        logger.info("=== UPDATE REPORT DEBUG ===")
+        logger.info(f"Report ID: {report_id}")
+        logger.info(f"Report update data: {report_update}")
+        logger.info(f"Filters in request: {report_update.filters}")
+        
         report = db.query(Report).filter(Report.id == report_id).first()
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
         
         if report_update.name is not None:
             report.name = report_update.name
+            logger.info(f"✅ Updated name to: {report.name}")
         if report_update.widgets is not None:
             report.widgets = report_update.widgets
+            logger.info(f"✅ Updated widgets (count: {len(report.widgets)})")
+        if report_update.filters is not None:
+            logger.info(f"✅ Setting filters to: {report_update.filters}")
+            report.filters = report_update.filters
+            logger.info(f"✅ Report.filters is now: {report.filters}")
+        else:
+            logger.warning(f"⚠️ Filters is None, not updating")
         
         report.updated_at = datetime.utcnow()
+        
+        logger.info(f"Before commit - report.filters: {report.filters}")
         db.commit()
         db.refresh(report)
+        logger.info(f"After commit - report.filters: {report.filters}")
         
         return ReportResponse(
             id=report.id,
             name=report.name,
             user_id=report.user_id,
             widgets=report.widgets if isinstance(report.widgets, list) else [],
+            filters=report.filters if isinstance(report.filters, dict) else {},
             created_at=report.created_at.isoformat(),
             updated_at=report.updated_at.isoformat()
         )
@@ -228,6 +255,8 @@ async def get_aggregated_data(
     date_from: Optional[str] = Query(None, description="Start date (ISO format)"),
     date_to: Optional[str] = Query(None, description="End date (ISO format)"),
     date_field: str = Query("date", description="Field name to use for date filtering"),
+    currency_field: Optional[str] = Query(None, description="Currency field name for grouping"),
+    split_by_currency: bool = Query(False, description="Split data into separate series by currency"),
     db: Session = Depends(lambda: get_db("main"))
 ):
     """
@@ -256,7 +285,11 @@ async def get_aggregated_data(
         transactions = query.all()
         
         # Aggregate data in Python (since JSON field querying is complex)
-        aggregated = defaultdict(list)
+        # Structure: aggregated[x_value][currency] = [values...]
+        if split_by_currency and currency_field:
+            aggregated = defaultdict(lambda: defaultdict(list))
+        else:
+            aggregated = defaultdict(list)
         
         for txn in transactions:
             # Merge ingested and computed content
@@ -348,36 +381,94 @@ async def get_aggregated_data(
                             continue
             
             if y_value is not None:
-                aggregated[x_value].append(y_value)
+                # Handle currency grouping
+                if split_by_currency and currency_field:
+                    # Extract currency code or symbol
+                    currency = content.get(currency_field, 'UNKNOWN')
+                    if isinstance(currency, str):
+                        # Map common symbols to codes for consistency
+                        symbol_to_code = {
+                            '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY',
+                            '₹': 'INR', '₽': 'RUB', 'R$': 'BRL', '₩': 'KRW',
+                            'kr': 'NOK', 'zł': 'PLN', '฿': 'THB', 'Rp': 'IDR',
+                            'RM': 'MYR', '₱': 'PHP', 'R': 'ZAR', '₺': 'TRY'
+                        }
+                        currency = symbol_to_code.get(currency, currency.upper())
+                    aggregated[x_value][currency].append(y_value)
+                else:
+                    aggregated[x_value].append(y_value)
         
         # Apply aggregation
-        labels = []
-        values = []
-        
-        for label in sorted(aggregated.keys()):
-            data_points = aggregated[label]
+        if split_by_currency and currency_field:
+            # Build multi-currency response
+            labels = sorted(aggregated.keys())
             
-            if aggregation == 'sum':
-                value = sum(data_points)
-            elif aggregation == 'avg':
-                value = sum(data_points) / len(data_points) if data_points else 0
-            elif aggregation == 'count':
-                value = len(data_points)
-            else:
-                value = sum(data_points)  # default to sum
+            # Collect all currencies
+            all_currencies = set()
+            for label in labels:
+                all_currencies.update(aggregated[label].keys())
+            all_currencies = sorted(all_currencies)
             
-            labels.append(label)
-            values.append(round(value, 2))
-        
-        return {
-            "labels": labels,
-            "values": values,
-            "x_field": x_field,
-            "y_field": y_field,
-            "aggregation": aggregation,
-            "total_records": len(transactions),
-            "filtered_records": sum(len(v) for v in aggregated.values())
-        }
+            # Build values by currency
+            values_by_currency = {}
+            for currency in all_currencies:
+                currency_values = []
+                for label in labels:
+                    data_points = aggregated[label].get(currency, [])
+                    
+                    if aggregation == 'sum':
+                        value = sum(data_points)
+                    elif aggregation == 'avg':
+                        value = sum(data_points) / len(data_points) if data_points else 0
+                    elif aggregation == 'count':
+                        value = len(data_points)
+                    else:
+                        value = sum(data_points)
+                    
+                    currency_values.append(round(value, 2))
+                
+                values_by_currency[currency] = currency_values
+            
+            return {
+                "labels": labels,
+                "values_by_currency": values_by_currency,
+                "currencies": all_currencies,
+                "x_field": x_field,
+                "y_field": y_field,
+                "aggregation": aggregation,
+                "split_by_currency": True,
+                "total_records": len(transactions)
+            }
+        else:
+            # Single series response
+            labels = []
+            values = []
+            
+            for label in sorted(aggregated.keys()):
+                data_points = aggregated[label]
+                
+                if aggregation == 'sum':
+                    value = sum(data_points)
+                elif aggregation == 'avg':
+                    value = sum(data_points) / len(data_points) if data_points else 0
+                elif aggregation == 'count':
+                    value = len(data_points)
+                else:
+                    value = sum(data_points)  # default to sum
+                
+                labels.append(label)
+                values.append(round(value, 2))
+            
+            return {
+                "labels": labels,
+                "values": values,
+                "x_field": x_field,
+                "y_field": y_field,
+                "aggregation": aggregation,
+                "split_by_currency": False,
+                "total_records": len(transactions),
+                "filtered_records": sum(len(v) for v in aggregated.values())
+            }
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to aggregate data: {str(e)}")

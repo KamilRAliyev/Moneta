@@ -6,12 +6,13 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ labels: [], values: [] })
+    default: () => ({ labels: [], values: [], isCurrencyGrouped: false, currencyCode: null })
   },
   config: {
     type: Object,
@@ -103,6 +104,11 @@ const createChart = () => {
         .duration(200)
         .attr('d', arcHover)
 
+      // Format value for tooltip (tooltips always show full precision)
+      const formattedValue = props.data.currencyCode ?
+        formatCurrency(d.data.value, props.data.currencyCode, { compact: false }) :
+        d.data.value.toLocaleString()
+        
       // Create tooltip
       const percentage = ((d.data.value / d3.sum(data, d => d.value)) * 100).toFixed(1)
       const tooltip = d3.select(chartContainer.value)
@@ -116,7 +122,7 @@ const createChart = () => {
         .style('font-size', '12px')
         .style('pointer-events', 'none')
         .style('z-index', '1000')
-        .html(`<strong>${d.data.label}</strong><br/>Value: ${d.data.value.toLocaleString()}<br/>Percentage: ${percentage}%`)
+        .html(`<strong>${d.data.label}</strong><br/>Value: ${formattedValue}<br/>Percentage: ${percentage}%`)
         .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
         .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
     })
@@ -131,13 +137,21 @@ const createChart = () => {
 
   // Add center text with total
   const total = d3.sum(data, d => d.value)
+  const useCompact = props.config.compactNumbers !== false
+  const formattedTotal = props.data.currencyCode ?
+    formatCurrency(total, props.data.currencyCode, { compact: useCompact }) :
+    (useCompact && Math.abs(total) >= 1000 ?
+      new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(total) :
+      total.toLocaleString()
+    )
+    
   svg.append('text')
     .attr('text-anchor', 'middle')
     .attr('dy', '-0.5em')
     .style('font-size', '24px')
     .style('font-weight', 'bold')
     .style('fill', textColor.value || '#000000')
-    .text(total.toLocaleString())
+    .text(formattedTotal)
 
   svg.append('text')
     .attr('text-anchor', 'middle')

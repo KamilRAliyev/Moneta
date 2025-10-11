@@ -480,6 +480,7 @@ import { useAlert } from '@/composables/useAlert'
 import RuleEditor from '@/components/rules/RuleEditor.vue'
 import RuleDialog from '@/components/rules/RuleDialog.vue'
 import RuleTestDialog from '@/components/rules/RuleTestDialog.vue'
+import api from '@/api/axios'
 
 // Icons
 import { Plus, Play, Edit, Trash2, Settings, FileX, TestTube, Save, GripVertical, X, Eye, RefreshCw, Copy } from 'lucide-vue-next'
@@ -644,9 +645,8 @@ export default {
     const loadRules = async () => {
       try {
         loading.value = true
-        const response = await fetch('/api/rules')
-        if (!response.ok) throw new Error('Failed to load rules')
-        rules.value = await response.json()
+        const response = await api.get('/rules')
+        rules.value = response.data
         
         // Extract unique target fields
         targetFields.value = [...new Set(rules.value.map(rule => rule.target_field))].sort()
@@ -659,9 +659,8 @@ export default {
 
     const loadTransactionFields = async () => {
       try {
-        const response = await fetch('/api/formulas/fields')
-        if (!response.ok) throw new Error('Failed to load transaction fields')
-        const data = await response.json()
+        const response = await api.get('/formulas/fields')
+        const data = response.data
         
         // Store both ingested and computed fields separately for better organization
         transactionFields.value = {
@@ -682,9 +681,8 @@ export default {
 
     const loadFormulaCommands = async () => {
       try {
-        const response = await fetch('/api/formulas/commands')
-        if (!response.ok) throw new Error('Failed to load formula commands')
-        formulaCommands.value = await response.json()
+        const response = await api.get('/formulas/commands')
+        formulaCommands.value = response.data
       } catch (error) {
         console.error('Error loading formula commands:', error)
       }
@@ -786,21 +784,15 @@ export default {
     const handleRuleSave = async (ruleData) => {
       try {
         const isEdit = !!ruleData.id
-        const url = isEdit ? `/api/rules/${ruleData.id}` : '/api/rules'
-        const method = isEdit ? 'PUT' : 'POST'
         
-        const response = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ruleData)
-        })
-        
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || 'Failed to save rule')
+        let response
+        if (isEdit) {
+          response = await api.put(`/rules/${ruleData.id}`, ruleData)
+        } else {
+          response = await api.post('/rules', ruleData)
         }
         
-        const savedRule = await response.json()
+        const savedRule = response.data
         
         if (isEdit) {
           const index = rules.value.findIndex(r => r.id === savedRule.id)
@@ -820,7 +812,7 @@ export default {
         targetFields.value = [...new Set(rules.value.map(rule => rule.target_field))].sort()
         
       } catch (error) {
-        showAlert('Error saving rule: ' + error.message, 'error')
+        showAlert('Error saving rule: ' + (error.response?.data?.detail || error.message), 'error')
       }
     }
 
@@ -830,11 +822,7 @@ export default {
       }
       
       try {
-        const response = await fetch(`/api/rules/${rule.id}`, {
-          method: 'DELETE'
-        })
-        
-        if (!response.ok) throw new Error('Failed to delete rule')
+        await api.delete(`/rules/${rule.id}`)
         
         rules.value = rules.value.filter(r => r.id !== rule.id)
         if (selectedRule.value?.id === rule.id) {
@@ -848,7 +836,7 @@ export default {
         targetFields.value = [...new Set(rules.value.map(rule => rule.target_field))].sort()
         
       } catch (error) {
-        showAlert('Error deleting rule: ' + error.message, 'error')
+        showAlert('Error deleting rule: ' + (error.response?.data?.detail || error.message), 'error')
       }
     }
 
@@ -866,18 +854,8 @@ export default {
       if (!selectedRule.value || !hasUnsavedChanges.value) return
       
       try {
-        const response = await fetch(`/api/rules/${selectedRule.value.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(selectedRule.value)
-        })
-        
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || 'Failed to save rule')
-        }
-        
-        const savedRule = await response.json()
+        const response = await api.put(`/rules/${selectedRule.value.id}`, selectedRule.value)
+        const savedRule = response.data
         
         // Update the rule in the rules list
         const index = rules.value.findIndex(r => r.id === savedRule.id)
@@ -892,7 +870,7 @@ export default {
         showAlert('✅ Rule saved successfully', 'success')
         
       } catch (error) {
-        showAlert('❌ Error saving rule: ' + error.message, 'error')
+        showAlert('❌ Error saving rule: ' + (error.response?.data?.detail || error.message), 'error')
       }
     }
 
@@ -914,15 +892,8 @@ export default {
           requestBody.target_fields = [selectedTargetField.value]
         }
         
-        const response = await fetch('/api/rules/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        })
-        
-        if (!response.ok) throw new Error('Failed to execute rules')
-        
-        const result = await response.json()
+        const response = await api.post('/rules/execute', requestBody)
+        const result = response.data
         
         if (result.success) {
           const processedCount = result.processed_transactions || 0
@@ -942,7 +913,7 @@ export default {
         }
         
       } catch (error) {
-        showAlert(`❌ Error executing rules: ${error.message}`, 'error', { duration: 8000 })
+        showAlert(`❌ Error executing rules: ${error.response?.data?.detail || error.message}`, 'error', { duration: 8000 })
       } finally {
         loading.value = false
       }
