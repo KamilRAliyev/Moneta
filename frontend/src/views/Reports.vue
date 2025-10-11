@@ -51,7 +51,7 @@
             <!-- Date Range Filter -->
             <DateRangePicker 
               v-if="currentReport"
-              :model-value="dateRange.value"
+              :model-value="dateRange"
               :metadata="metadata"
               @update:modelValue="updateDateRange"
             />
@@ -129,6 +129,7 @@
         @close-widget-config="closeWidgetConfig"
         @close="closeSidebar"
         @toggle-display-mode="toggleDisplayMode"
+        @save-report="handleManualSave"
       />
       
       <!-- Loading State -->
@@ -224,7 +225,7 @@
                   :key="`table-${item.i}-${widgetRefreshKey}`"
                   :config="item.config"
                   :is-edit-mode="isEditMode"
-                  :date-range="dateRange.value"
+                  :date-range="dateRange"
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
                 />
@@ -255,6 +256,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useDebounceFn } from '@vueuse/core'
 import { useReportsPersistence } from '@/composables/useReportsPersistence'
+import { useAlert } from '@/composables/useAlert'
 
 // State
 const reports = ref([])
@@ -273,6 +275,9 @@ const selectedWidget = ref(null)
 
 // Persistence
 const persistence = useReportsPersistence()
+
+// Alerts
+const alert = useAlert()
 
 // Resource monitoring
 const resourceUsage = computed(() => {
@@ -351,7 +356,17 @@ const loadReport = async () => {
   try {
     loading.value = true
     const response = await reportsApi.getReport(selectedReportId.value)
-    currentReport.value = response.data
+    
+    // IMPORTANT: Restore date filters BEFORE setting currentReport
+    // This ensures DateRangePicker receives the correct saved filters when it mounts
+    if (response.data.filters && response.data.filters.dateRange) {
+      console.log('📅 Restoring saved date filters:', response.data.filters.dateRange)
+      dateRange.value = { ...response.data.filters.dateRange }
+    } else {
+      // Reset to default if no filters saved
+      console.log('📅 No saved filters, using defaults')
+      dateRange.value = { from: null, to: null, dateField: 'date' }
+    }
     
     // Save as last viewed
     persistence.setLastViewedReportId(selectedReportId.value)
@@ -366,8 +381,13 @@ const loadReport = async () => {
       type: widget.type,
       config: widget.config || {}
     }))
+    
+    // Set currentReport AFTER updating filters
+    // This triggers v-if="currentReport" and creates DateRangePicker with correct values
+    currentReport.value = response.data
   } catch (error) {
     console.error('Failed to load report:', error)
+    alert.error('Failed to load report.')
   } finally {
     loading.value = false
   }
@@ -380,7 +400,10 @@ const createNewReport = async () => {
   try {
     const response = await reportsApi.createReport({
       name,
-      widgets: []
+      widgets: [],
+      filters: {
+        dateRange: dateRange.value
+      }
     })
     
     reports.value.push(response.data)
@@ -388,14 +411,16 @@ const createNewReport = async () => {
     currentReport.value = response.data
     layout.value = []
     isEditMode.value = true
+    
+    alert.success('Report created successfully!')
   } catch (error) {
     console.error('Failed to create report:', error)
-    alert('Failed to create report. Please try again.')
+    alert.error('Failed to create report. Please try again.')
   }
 }
 
 const saveReport = async () => {
-  if (!currentReport.value) return
+  if (!currentReport.value) return false
   
   try {
     saving.value = true
@@ -411,19 +436,29 @@ const saveReport = async () => {
       config: item.config
     }))
     
+    // Include filters with dateRange
+    const filters = {
+      dateRange: dateRange.value
+    }
+    
     await reportsApi.updateReport(currentReport.value.id, {
       name: currentReport.value.name,
-      widgets
+      widgets,
+      filters
     })
     
     // Update local reports list
     const reportIndex = reports.value.findIndex(r => r.id === currentReport.value.id)
     if (reportIndex !== -1) {
-      reports.value[reportIndex] = { ...currentReport.value, widgets }
+      reports.value[reportIndex] = { ...currentReport.value, widgets, filters }
     }
+    
+    alert.success('Report saved successfully!')
+    return true
   } catch (error) {
     console.error('Failed to save report:', error)
-    alert('Failed to save report. Please try again.')
+    alert.error('Failed to save report. Please try again.')
+    return false
   } finally {
     saving.value = false
   }
@@ -454,7 +489,11 @@ const deleteCurrentReport = async () => {
 const toggleMode = async () => {
   // If leaving edit mode, save the report automatically
   if (isEditMode.value && currentReport.value) {
-    await saveReport()
+    const saved = await saveReport()
+    if (!saved) {
+      // Don't toggle mode if save failed
+      return
+    }
   }
   isEditMode.value = !isEditMode.value
   
@@ -540,6 +579,16 @@ const toggleDisplayMode = () => {
     sidebarOpen.value = false
   } else if (isEditMode.value) {
     sidebarOpen.value = true
+  }
+}
+
+const handleManualSave = async () => {
+  const saved = await saveReport()
+  if (saved) {
+    // Switch to lock mode and close sidebar
+    isEditMode.value = false
+    sidebarOpen.value = false
+    selectedWidget.value = null
   }
 }
 
