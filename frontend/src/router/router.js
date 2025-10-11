@@ -43,11 +43,29 @@ export const navigationItems = [
 ]
 
 // Generate routes from navigation items
-const routes = navigationItems.map(item => ({
-  path: item.path,
-  name: item.name,
-  component: item.component
-}))
+const routes = [
+  ...navigationItems.map(item => ({
+    path: item.path,
+    name: item.name,
+    component: item.component
+  })),
+  // Additional routes not in navigation
+  {
+    path: '/rules/create',
+    name: 'CreateRule',
+    component: () => import('@/views/CreateRule.vue')
+  },
+  {
+    path: '/rules/edit/:id',
+    name: 'EditRule',
+    component: () => import('@/views/CreateRule.vue')
+  },
+  {
+    path: '/reports',
+    name: 'Reports',
+    component: () => import('@/views/Reports.vue')
+  }
+]
 
 // Create router instance
 const router = createRouter({

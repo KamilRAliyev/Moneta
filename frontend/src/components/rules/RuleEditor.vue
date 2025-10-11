@@ -7,10 +7,13 @@
         <Input
           v-model="localRule.name"
           type="text"
-          placeholder="Enter rule name..."
+          placeholder="Auto-generated from target field..."
           class="mt-1"
           @input="handleInputChange"
         />
+        <p class="text-xs text-muted-foreground mt-1">
+          Auto-populated as: <code class="text-xs bg-muted px-1 rounded">target_field #N</code>
+        </p>
       </div>
       
       <div>
@@ -18,10 +21,13 @@
         <Input
           v-model="localRule.target_field"
           type="text"
-          placeholder="Enter target field name..."
+          placeholder="category, account, merchant_clean..."
           class="mt-1"
           @input="handleTargetFieldChange"
         />
+        <p class="text-xs text-muted-foreground mt-1">
+          Auto-prefixed with <code class="text-xs bg-muted px-1 rounded">computed_</code> on save
+        </p>
       </div>
     </div>
 
@@ -47,11 +53,13 @@
           v-model.number="localRule.priority"
           type="number"
           min="0"
-          placeholder="100"
+          placeholder="Auto-incremented"
           class="mt-1"
           @input="handleInputChange"
         />
-        <p class="text-xs text-muted-foreground mt-1">Lower = higher priority</p>
+        <p class="text-xs text-muted-foreground mt-1">
+          Auto-incremented • Lower = higher priority
+        </p>
       </div>
       
       <div>
@@ -380,7 +388,8 @@ export default {
     Checkbox,
     Badge,
     HelpCircle,
-    TestTube
+    TestTube,
+    Play
   },
   props: {
     rule: {
@@ -388,8 +397,8 @@ export default {
       required: true
     },
     transactionFields: {
-      type: Array,
-      default: () => []
+      type: [Array, Object],
+      default: () => ({ ingested: [], computed: [], all: [] })
     },
     formulaCommands: {
       type: Array,

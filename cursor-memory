@@ -1,0 +1,85 @@
+# Moneta Reporting System Implementation
+
+## Backend Implementation (COMPLETED)
+- ✅ Created Report and ReportWidget models in main.py
+- ✅ Implemented reports API endpoints (GET, POST, PUT, DELETE)
+- ✅ Added reports router to main server
+- ✅ Created database migration for new tables
+
+## Frontend Implementation (COMPLETED)
+- ✅ Installed vue3-grid-layout and chart.js dependencies
+- ✅ Created reports API service
+- ✅ Created main ReportsView.vue component with grid layout
+- ✅ Created ChartWidget.vue component with Chart.js integration
+- ✅ Created DropdownWidget.vue component
+- ✅ Added reports to navigation
+- ✅ Implemented data flow and widget interactions
+- ✅ Connected widgets to real transaction data
+
+## Key Features Implemented
+- Grid layout with drag & drop functionality (vue3-grid-layout)
+- Edit/View mode switching
+- Chart widgets with configuration panels (Chart.js)
+- Dropdown filter widgets with real data
+- Report CRUD operations
+- Widget configuration persistence
+- Real-time data fetching from transaction database
+- Responsive design with Tailwind CSS
+
+## API Endpoints
+- GET /api/reports/ - List all reports
+- POST /api/reports/ - Create new report
+- GET /api/reports/{id}/ - Get specific report
+- PUT /api/reports/{id}/ - Update report
+- DELETE /api/reports/{id}/ - Delete report
+- GET /api/reports/{id}/data/ - Get report data
+- GET /api/reports/data/aggregated/ - Get aggregated chart data
+
+## Widget Types
+1. **Chart Widget**: Bar, line, pie charts with configurable fields and aggregations
+2. **Dropdown Widget**: Filter widgets for month, category, account, statement
+
+## Database Schema
+- reports table: id, name, owner, created_at, updated_at
+- report_widgets table: id, report_id, type, x, y, w, h, config (JSON)
+
+## Backend Tests (COMPLETED ✅ - REMEMBER FOR FUTURE CHANGES)
+- ✅ Created comprehensive test suite in backend/tests/test_reports_api.py
+- ✅ Fixed database dependency override to use standard get_db pattern
+- ✅ Tests cover all CRUD operations for reports and widgets
+- ✅ Tests include sample data generation and validation
+- ✅ Tests verify widget configuration persistence
+- ✅ Tests check aggregated data endpoints
+- ✅ All 11 tests now passing successfully
+- ⚠️ ALWAYS RUN THESE TESTS AFTER BACKEND CHANGES: `poetry run pytest tests/test_reports_api.py -v`
+- ⚠️ Tests use separate test database with proper fixtures from conftest.py
+
+## Backend API Fixed ✅
+- ✅ Fixed reports router to use standard `Depends(get_db)` pattern instead of lambda
+- ✅ Removed db_key parameter requirement from all endpoints
+- ✅ Updated frontend API service to not send db_key parameter
+- ✅ All endpoints working correctly with existing test infrastructure
+
+## Status: BACKEND COMPLETE ✅ - FRONTEND ISSUES REMAINING ❌
+Backend completely fixed and tested. Frontend still has critical issues:
+- ❌ Dropdown has weird ticks instead of proper selection
+- ❌ Edit mode shows settings/remove buttons when it shouldn't
+- ❌ Charts completely broken (no data rendering)
+- ❌ Create Report button not working
+- ❌ Add Chart/Add Filter buttons not working
+
+## Theming Updates Completed
+- ✅ Updated ReportsView to use shadcn Button, Card, Select components
+- ✅ Updated ChartWidget to use shadcn Button, Card, Input, Label, Select components
+- ✅ Updated DropdownWidget to use shadcn Button, Card, Input, Label, Select, Textarea components
+- ✅ Replaced all custom CSS classes with shadcn design tokens
+- ✅ Maintained consistent theming with existing application
+
+## Sample Reports Created ✅
+- 📈 Monthly Spending Overview - Bar charts by category, spending trends, pie distribution
+- 💰 Income vs Expenses Analysis - Income vs expenses comparison, net worth tracking
+- 🏷️ Category Breakdown - Pie charts by category, top spending categories, trends over time
+- 📅 Spending Trends - Daily spending patterns, weekly averages, day-of-week analysis
+- 🏦 Account Summary - Account balances, balance history, account distribution
+- 💳 Top Merchants Analysis - Top 10 merchants, spending trends, merchant categories
+- 📊 Financial Health Dashboard - Income vs expenses pie, savings rate, net worth growth

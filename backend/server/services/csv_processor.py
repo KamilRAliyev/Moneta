@@ -279,6 +279,9 @@ class CSVProcessor:
         
         for transaction_data in transactions_data:
             try:
+                # Add statement filename to ingested content for easy reference
+                transaction_data['statement_filename'] = statement.filename
+                
                 # Collect unique columns
                 all_ingested_columns.update(transaction_data.keys())
                 

@@ -61,6 +61,8 @@ class SafeExpressionEvaluator:
         ast.Mult: operator.mul,
         ast.Div: operator.truediv,
         ast.Mod: operator.mod,
+        ast.USub: operator.neg,  # Unary minus (e.g., -1)
+        ast.UAdd: operator.pos,  # Unary plus (e.g., +1)
     }
     
     def __init__(self, context: RuleExecutionContext):

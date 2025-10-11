@@ -468,6 +468,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -518,6 +519,7 @@ export default {
     Copy
   },
   setup() {
+    const router = useRouter()
     const { showAlert } = useAlert()
     
     // State
@@ -764,22 +766,16 @@ export default {
         targetField = selectedTargetField.value
       }
       
-      dialogRule.value = {
-        name: '',
-        description: '',
-        target_field: targetField,
-        condition: '',
-        action: '',
-        rule_type: 'formula',
-        priority: 100,
-        active: true
-      }
-      showRuleDialog.value = true
+      // Navigate to CreateRule page with target_field query param
+      router.push({ 
+        path: '/rules/create',
+        query: targetField ? { target_field: targetField } : {}
+      })
     }
 
     const editRule = (rule) => {
-      dialogRule.value = { ...rule }
-      showRuleDialog.value = true
+      // Navigate to EditRule page with rule id
+      router.push(`/rules/edit/${rule.id}`)
     }
 
     const closeRuleDialog = () => {
