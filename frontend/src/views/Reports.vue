@@ -107,16 +107,27 @@
     </div>
 
     <!-- Main Content -->
-    <div class="p-6">
+    <div 
+      class="p-6 transition-all duration-300"
+      :class="{ 'mr-[400px]': persistence.sidebarMode.value === 'sidebar' && sidebarOpen }"
+    >
       <!-- Floating Toolbar -->
       <FloatingToolbar
-        v-if="currentReport && isEditMode"
+        v-if="currentReport"
         :is-edit-mode="isEditMode"
         :report-name="currentReport.name"
         :widget-count="resourceUsage.widgetCount"
         :memory="resourceUsage.memory"
+        :mode="persistence.sidebarMode.value"
+        :is-open="sidebarOpen"
+        :selected-widget="selectedWidget"
+        :metadata="metadata"
         @toggle-mode="toggleMode"
         @add-widget="addWidget"
+        @update-widget-config="updateWidgetConfigFromToolbar"
+        @close-widget-config="closeWidgetConfig"
+        @close="closeSidebar"
+        @toggle-display-mode="toggleDisplayMode"
       />
       
       <!-- Loading State -->
@@ -172,6 +183,7 @@
                   :metadata="metadata"
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
+                  @configure="() => openWidgetConfig(item)"
                 />
                 
                 <!-- Stats Widget -->
@@ -184,6 +196,7 @@
                   :metadata="metadata"
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
+                  @configure="() => openWidgetConfig(item)"
                 />
                 
                 <!-- Heading Widget -->
@@ -254,6 +267,8 @@ const refreshing = ref(false)
 const dateRange = ref({ from: null, to: null, dateField: 'date' })
 const metadata = ref({ ingested_columns: {}, computed_columns: {} })
 const widgetRefreshKey = ref(0)
+const sidebarOpen = ref(false)
+const selectedWidget = ref(null)
 
 // Persistence
 const persistence = useReportsPersistence()
@@ -441,9 +456,17 @@ const toggleMode = async () => {
     await saveReport()
   }
   isEditMode.value = !isEditMode.value
+  
+  // Auto-open sidebar when entering edit mode (only if in sidebar mode)
+  if (isEditMode.value && persistence.sidebarMode.value === 'sidebar') {
+    sidebarOpen.value = true
+  } else if (!isEditMode.value) {
+    sidebarOpen.value = false
+    selectedWidget.value = null
+  }
 }
 
-const addWidget = (type) => {
+const addWidget = (type, chartType = null) => {
   const widthMap = {
     chart: 6,
     stats: 3,
@@ -467,7 +490,7 @@ const addWidget = (type) => {
     w: widthMap[type] || 6,
     h: heightMap[type] || 4,
     type,
-    config: getDefaultConfig(type)
+    config: getDefaultConfig(type, chartType)
   }
   
   layout.value.push(newWidget)
@@ -490,16 +513,64 @@ const updateWidgetConfig = (widgetId, newConfig) => {
   }
 }
 
+const updateWidgetConfigFromToolbar = ({ id, config }) => {
+  const widget = layout.value.find(item => item.i === id)
+  if (widget) {
+    widget.config = { ...widget.config, ...config }
+    autoSave()
+  }
+}
+
+const closeWidgetConfig = () => {
+  selectedWidget.value = null
+}
+
+const closeSidebar = () => {
+  sidebarOpen.value = false
+  selectedWidget.value = null
+}
+
+const toggleDisplayMode = () => {
+  const newMode = persistence.sidebarMode.value === 'sidebar' ? 'floating' : 'sidebar'
+  persistence.setSidebarMode(newMode)
+  console.log('🔄 Switched display mode to:', newMode)
+  
+  if (newMode === 'floating') {
+    sidebarOpen.value = false
+  } else if (isEditMode.value) {
+    sidebarOpen.value = true
+  }
+}
+
+const openWidgetConfig = (item) => {
+  console.log('🔧 Opening widget config for:', item.i, item.type)
+  selectedWidget.value = {
+    id: item.i,
+    type: item.type,
+    config: item.config
+  }
+  sidebarOpen.value = true
+}
+
 const onLayoutUpdated = (newLayout) => {
   layout.value = newLayout
   autoSave()
 }
 
-const getDefaultConfig = (type) => {
+const getDefaultConfig = (type, chartType = null) => {
   if (type === 'chart') {
+    const chartTitles = {
+      bar: 'Bar Chart',
+      line: 'Line Chart',
+      donut: 'Donut Chart',
+      area: 'Area Chart',
+      treemap: 'Treemap',
+      multiline: 'Multi-Line Chart'
+    }
+    
     return {
-      title: 'New Chart',
-      chartType: 'bar',
+      title: chartTitles[chartType] || 'New Chart',
+      chartType: chartType || 'bar',
       x_field: 'category',
       y_field: 'amount',
       aggregation: 'sum'

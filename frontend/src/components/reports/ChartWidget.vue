@@ -1,9 +1,22 @@
 <template>
-  <div class="h-full flex flex-col">
+  <div 
+    class="h-full flex flex-col"
+    :class="{ 'cursor-pointer hover:bg-accent/5 transition-colors rounded-lg': isEditMode }"
+    @click="isEditMode ? $emit('configure') : undefined"
+  >
     <!-- Widget Header -->
-    <div class="flex items-center justify-between mb-3 flex-shrink-0">
+    <div class="flex items-center justify-between mb-3 flex-shrink-0" @click.stop>
       <h3 class="text-base font-semibold text-foreground">{{ localConfig.title || 'Chart' }}</h3>
       <div class="flex items-center space-x-1">
+        <Button
+          v-if="isEditMode"
+          @click="$emit('configure')"
+          variant="ghost"
+          size="sm"
+          title="Configure widget"
+        >
+          <Settings class="w-4 h-4" />
+        </Button>
         <Button
           v-if="isEditMode"
           @click="$emit('remove')"
@@ -44,7 +57,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X, Settings } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import BarChart from './BarChart.vue'
 import LineChart from './LineChart.vue'
@@ -73,7 +86,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['config-updated', 'remove'])
+const emit = defineEmits(['config-updated', 'remove', 'configure'])
 
 // Reactive data
 const localConfig = reactive({ ...props.config })

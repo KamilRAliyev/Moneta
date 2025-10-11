@@ -1,10 +1,5 @@
 <template>
-  <!-- Backdrop overlay for sidebar mode (only when configuring a widget) -->
-  <div
-    v-if="mode === 'sidebar' && isOpen && selectedWidget"
-    class="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
-    @click="emit('close-widget-config')"
-  />
+  <!-- No backdrop - content should remain visible and interactive -->
   
   <div 
     ref="toolbarRef"
@@ -342,29 +337,59 @@
         </Button>
 
         <!-- Widget Actions (Edit Mode) -->
-        <div v-if="isEditMode" class="space-y-2">
-          <Label class="text-xs text-muted-foreground">Add Widget</Label>
-          <div class="grid grid-cols-3 gap-2">
-            <Button @click="$emit('add-widget', 'chart')" variant="outline" size="sm">
-              <BarChart3 class="w-4 h-4 mr-1" />
-              Chart
-            </Button>
-            <Button @click="$emit('add-widget', 'stats')" variant="outline" size="sm">
-              <Activity class="w-4 h-4 mr-1" />
-              Stats
-            </Button>
-            <Button @click="$emit('add-widget', 'heading')" variant="outline" size="sm">
-              <Heading class="w-4 h-4 mr-1" />
-              Heading
-            </Button>
-            <Button @click="$emit('add-widget', 'divider')" variant="outline" size="sm">
-              <Minus class="w-4 h-4 mr-1" />
-              Divider
-            </Button>
-            <Button @click="$emit('add-widget', 'table')" variant="outline" size="sm">
-              <Table2 class="w-4 h-4 mr-1" />
-              Table
-            </Button>
+        <div v-if="isEditMode" class="space-y-3">
+          <!-- Chart Widgets -->
+          <div>
+            <Label class="text-xs text-muted-foreground mb-2 block">Chart Widgets</Label>
+            <div class="grid grid-cols-2 gap-2">
+              <Button @click="$emit('add-widget', 'chart', 'bar')" variant="outline" size="sm">
+                <BarChart3 class="w-4 h-4 mr-1" />
+                Bar
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'line')" variant="outline" size="sm">
+                <TrendingUp class="w-4 h-4 mr-1" />
+                Line
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'donut')" variant="outline" size="sm">
+                <PieChart class="w-4 h-4 mr-1" />
+                Donut
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'area')" variant="outline" size="sm">
+                <AreaChart class="w-4 h-4 mr-1" />
+                Area
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'treemap')" variant="outline" size="sm">
+                <LayoutGrid class="w-4 h-4 mr-1" />
+                Treemap
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'multiline')" variant="outline" size="sm">
+                <GitBranch class="w-4 h-4 mr-1" />
+                Multi-Line
+              </Button>
+            </div>
+          </div>
+
+          <!-- Other Widgets -->
+          <div>
+            <Label class="text-xs text-muted-foreground mb-2 block">Other Widgets</Label>
+            <div class="grid grid-cols-2 gap-2">
+              <Button @click="$emit('add-widget', 'stats')" variant="outline" size="sm">
+                <Activity class="w-4 h-4 mr-1" />
+                Stats
+              </Button>
+              <Button @click="$emit('add-widget', 'table')" variant="outline" size="sm">
+                <Table2 class="w-4 h-4 mr-1" />
+                Table
+              </Button>
+              <Button @click="$emit('add-widget', 'heading')" variant="outline" size="sm">
+                <Heading class="w-4 h-4 mr-1" />
+                Heading
+              </Button>
+              <Button @click="$emit('add-widget', 'divider')" variant="outline" size="sm">
+                <Minus class="w-4 h-4 mr-1" />
+                Divider
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -374,7 +399,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart, LayoutGrid, GitBranch } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'

@@ -1,16 +1,30 @@
 <template>
-  <div class="h-full flex flex-col">
+  <div 
+    class="h-full flex flex-col"
+    :class="{ 'cursor-pointer hover:bg-accent/5 transition-colors rounded-lg': isEditMode }"
+    @click="isEditMode ? $emit('configure') : undefined"
+  >
     <!-- Widget Header -->
-    <div v-if="isEditMode" class="flex items-center justify-end mb-2 flex-shrink-0">
-      <Button
-        @click="$emit('remove')"
-        variant="ghost"
-        size="sm"
-        class="text-destructive hover:text-destructive"
-        title="Remove widget"
-      >
-        <X class="w-4 h-4" />
-      </Button>
+    <div v-if="isEditMode" class="flex items-center justify-end mb-2 flex-shrink-0" @click.stop>
+      <div class="flex items-center space-x-1">
+        <Button
+          @click="$emit('configure')"
+          variant="ghost"
+          size="sm"
+          title="Configure widget"
+        >
+          <Settings class="w-4 h-4" />
+        </Button>
+        <Button
+          @click="$emit('remove')"
+          variant="ghost"
+          size="sm"
+          class="text-destructive hover:text-destructive"
+          title="Remove widget"
+        >
+          <X class="w-4 h-4" />
+        </Button>
+      </div>
     </div>
 
     <!-- Stats Display -->
@@ -35,7 +49,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { X, TrendingUp, TrendingDown, Minus } from 'lucide-vue-next'
+import { X, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/utils/currency'
@@ -59,7 +73,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['config-updated', 'remove'])
+const emit = defineEmits(['config-updated', 'remove', 'configure'])
 
 // Computed
 const availableFields = computed(() => {
