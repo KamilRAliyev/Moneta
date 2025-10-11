@@ -211,8 +211,8 @@ const createChart = () => {
     .duration(800)
     .delay((d, i) => i * 80)
     .ease(d3.easeQuadOut)
-    .attr('y', d => y(Math.max(d.start, d.end)))
-    .attr('height', d => Math.abs(y(d.start) - y(d.end)))
+    .attr('y', d => Math.min(y(d.start), y(d.end)))
+    .attr('height', d => Math.max(0, Math.abs(y(d.start) - y(d.end))))
 
   // Add tooltips
   bars.on('mouseover', function(event, d) {

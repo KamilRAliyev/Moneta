@@ -341,6 +341,18 @@
           {{ isEditMode ? 'Edit Mode' : 'Lock Mode' }}
         </Button>
 
+        <!-- Save Report Button (Edit Mode Only) -->
+        <Button
+          v-if="isEditMode"
+          @click="$emit('save-report')"
+          variant="default"
+          class="w-full bg-green-600 hover:bg-green-700"
+          size="sm"
+        >
+          <Save class="w-4 h-4 mr-2" />
+          Save & Lock
+        </Button>
+
         <!-- Used Fields Section -->
         <div v-if="usedFields.length > 0" class="space-y-2 pt-3 border-t">
           <Label class="text-xs text-muted-foreground">Used Fields in Report</Label>
@@ -460,7 +472,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge, Save } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -507,7 +519,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['toggle-mode', 'add-widget', 'update-widget-config', 'close-widget-config', 'close', 'toggle-display-mode'])
+const emit = defineEmits(['toggle-mode', 'add-widget', 'update-widget-config', 'close-widget-config', 'close', 'toggle-display-mode', 'save-report'])
 
 const toolbarRef = ref(null)
 const isCollapsed = ref(false)

@@ -136,6 +136,9 @@ const createChart = () => {
         .style('filter', 'url(#donut-shadow) brightness(1.1)')
 
       // Format value for tooltip (tooltips always show full precision)
+      const isNegative = d.data.value < 0
+      const valueColor = isNegative ? '#EF4444' : '#10B981'
+      
       const formattedValue = props.data.currencyCode ?
         formatCurrency(d.data.value, props.data.currencyCode, { compact: false }) :
         d.data.value.toLocaleString()
@@ -159,8 +162,9 @@ const createChart = () => {
         .style('border', '1px solid rgba(255,255,255,0.1)')
         .html(`
           <div style="font-weight: 600; margin-bottom: 4px;">${d.data.label}</div>
-          <div style="font-size: 16px; font-weight: 700; margin-bottom: 2px;">${formattedValue}</div>
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 2px; color: ${valueColor};">${formattedValue}</div>
           <div style="font-size: 11px; opacity: 0.7;">${percentage}% of total</div>
+          <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">${isNegative ? 'Expense' : 'Income'}</div>
         `)
         .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
         .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)

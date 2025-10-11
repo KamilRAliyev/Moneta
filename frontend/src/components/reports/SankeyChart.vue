@@ -49,7 +49,9 @@ const createChart = () => {
     links = props.data.labels.map((label, i) => ({
       source: 'source',
       target: label,
-      value: Math.abs(props.data.values[i])
+      value: Math.abs(props.data.values[i]),
+      originalValue: props.data.values[i],
+      isNegative: props.data.values[i] < 0
     }))
   }
   
@@ -90,15 +92,23 @@ const createChart = () => {
   // Generate sankey data
   const graph = sankeyGenerator(sankeyData)
 
-  // Create color scale
+  // Financial color coding: red for negative (expenses), green for positive (income)
+  const negativeColor = '#EF4444' // Red for expenses/negative
+  const positiveColor = '#10B981' // Green for income/positive
+
+  // Create color scale - use standard colors for nodes
   const colorScale = d3.scaleOrdinal()
     .domain(graph.nodes.map(d => d.id))
     .range(chartColors.value)
 
-  // Create gradients for links
+  // Create gradients for links - color based on value sign
   const defs = svg.append('defs')
 
   graph.links.forEach((link, i) => {
+    // Determine link color based on original value sign
+    const isNegative = link.isNegative || false
+    const linkColor = isNegative ? negativeColor : positiveColor
+    
     const gradient = defs.append('linearGradient')
       .attr('id', `sankey-gradient-${i}`)
       .attr('gradientUnits', 'userSpaceOnUse')
@@ -107,13 +117,13 @@ const createChart = () => {
 
     gradient.append('stop')
       .attr('offset', '0%')
-      .attr('stop-color', colorScale(link.source.id))
-      .attr('stop-opacity', 0.5)
+      .attr('stop-color', linkColor)
+      .attr('stop-opacity', 0.6)
 
     gradient.append('stop')
       .attr('offset', '100%')
-      .attr('stop-color', colorScale(link.target.id))
-      .attr('stop-opacity', 0.3)
+      .attr('stop-color', linkColor)
+      .attr('stop-opacity', 0.4)
   })
 
   // Add links
@@ -196,10 +206,14 @@ const createChart = () => {
       .duration(200)
       .style('filter', 'brightness(1.3)')
 
-    // Format value
+    // Format value with sign
+    const signedValue = d.originalValue !== undefined ? d.originalValue : d.value
+    const isNegative = d.isNegative || false
+    const valueColor = isNegative ? '#EF4444' : '#10B981'
+    
     const formattedValue = props.data.currencyCode ?
-      formatCurrency(d.value, props.data.currencyCode, { compact: false }) :
-      d.value.toLocaleString()
+      formatCurrency(signedValue, props.data.currencyCode, { compact: false }) :
+      signedValue.toLocaleString(undefined, { signDisplay: 'always' })
 
     const tooltip = d3.select(chartContainer.value)
       .append('div')
@@ -222,7 +236,8 @@ const createChart = () => {
           <span style="opacity: 0.6;"> → </span>
           <span style="color: ${colorScale(d.target.id)};">${d.target.name || d.target.id}</span>
         </div>
-        <div style="font-size: 16px; font-weight: 700;">${formattedValue}</div>
+        <div style="font-size: 16px; font-weight: 700; color: ${valueColor};">${formattedValue}</div>
+        <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">${isNegative ? 'Expense' : 'Income'}</div>
       `)
       .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
       .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)

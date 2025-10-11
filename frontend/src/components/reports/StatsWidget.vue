@@ -112,6 +112,14 @@ const themeClass = computed(() => {
 })
 
 const valueClass = computed(() => {
+  // Financial color coding: red for negative (expenses), green for positive (income)
+  if (statValue.value < 0) {
+    return 'text-red-600 dark:text-red-400' // Negative = Expense = Red
+  } else if (statValue.value > 0) {
+    return 'text-green-600 dark:text-green-400' // Positive = Income = Green
+  }
+  
+  // Fallback to theme-based coloring for zero values
   const themes = {
     default: 'text-foreground',
     success: 'text-green-600 dark:text-green-400',

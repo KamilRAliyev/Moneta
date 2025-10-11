@@ -45,7 +45,9 @@ const createChart = () => {
   const children = props.data.labels
     .map((label, i) => ({
       name: label,
-      value: Math.abs(props.data.values[i])
+      value: Math.abs(props.data.values[i]),
+      originalValue: props.data.values[i], // Keep original signed value
+      isNegative: props.data.values[i] < 0
     }))
     .filter(item => item.value >= threshold) // Filter out very small items
     .sort((a, b) => b.value - a.value)
@@ -81,14 +83,15 @@ const createChart = () => {
   // Create drop shadow
   createDropShadow(svg, 'treemap-shadow')
 
-  // Create color scale
-  const colorScale = d3.scaleOrdinal()
-    .domain(props.data.labels)
-    .range(chartColors.value)
+  // Financial color coding: red for negative (expenses), green for positive (income)
+  const negativeColor = '#EF4444' // Red for expenses/negative
+  const positiveColor = '#10B981' // Green for income/positive
 
-  // Create gradients for each tile
-  props.data.labels.forEach((label, i) => {
-    const color = chartColors.value[i % chartColors.value.length]
+  // Create gradients for each tile based on sign
+  root.leaves().forEach((d, i) => {
+    const isNegative = d.data.isNegative
+    const baseColor = isNegative ? negativeColor : positiveColor
+    
     const gradient = defs.append('linearGradient')
       .attr('id', `treemap-gradient-${i}`)
       .attr('x1', '0%')
@@ -98,12 +101,12 @@ const createChart = () => {
     
     gradient.append('stop')
       .attr('offset', '0%')
-      .attr('stop-color', color)
+      .attr('stop-color', baseColor)
       .attr('stop-opacity', 0.95)
     
     gradient.append('stop')
       .attr('offset', '100%')
-      .attr('stop-color', color)
+      .attr('stop-color', baseColor)
       .attr('stop-opacity', 0.75)
   })
 
@@ -201,12 +204,14 @@ const createChart = () => {
       if (width < 60 || height < 40) return '' // Hide if too small
       
       const useCompact = props.config.compactNumbers !== false
+      const signedValue = d.data.originalValue
+      
       if (props.data.currencyCode) {
-        return formatCurrency(d.value, props.data.currencyCode, { compact: useCompact })
-      } else if (useCompact && Math.abs(d.value) >= 1000) {
-        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d.value)
+        return formatCurrency(signedValue, props.data.currencyCode, { compact: useCompact })
+      } else if (useCompact && Math.abs(signedValue) >= 1000) {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1, signDisplay: 'always' }).format(signedValue)
       } else {
-        return d.value.toLocaleString()
+        return signedValue.toLocaleString(undefined, { signDisplay: 'always' })
       }
     })
     .attr('opacity', 0)
@@ -286,15 +291,20 @@ const createChart = () => {
         .style('border', '1px solid rgba(255,255,255,0.15)')
         .html(() => {
           let formattedValue
+          const signedValue = d.data.originalValue
+          const sign = d.data.isNegative ? '−' : '+'
+          const colorClass = d.data.isNegative ? 'color: #EF4444' : 'color: #10B981'
+          
           if (props.data.currencyCode) {
-            formattedValue = formatCurrency(d.value, props.data.currencyCode, { compact: false })
+            formattedValue = formatCurrency(signedValue, props.data.currencyCode, { compact: false })
           } else {
-            formattedValue = d.value.toLocaleString()
+            formattedValue = signedValue.toLocaleString(undefined, { signDisplay: 'always' })
           }
           return `
             <div style="font-weight: 700; margin-bottom: 6px; font-size: 14px;">${d.data.name}</div>
-            <div style="font-size: 18px; font-weight: 800; margin-bottom: 4px;">${formattedValue}</div>
+            <div style="font-size: 18px; font-weight: 800; margin-bottom: 4px; ${colorClass}">${formattedValue}</div>
             <div style="font-size: 12px; opacity: 0.8;">${percentage}% of total</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">${d.data.isNegative ? 'Expense' : 'Income'}</div>
           `
         })
       
