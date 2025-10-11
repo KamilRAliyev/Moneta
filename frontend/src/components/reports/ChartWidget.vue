@@ -64,7 +64,6 @@ import LineChart from './LineChart.vue'
 import DonutChart from './DonutChart.vue'
 import AreaChart from './AreaChart.vue'
 import TreemapChart from './TreemapChart.vue'
-import MultiLineChart from './MultiLineChart.vue'
 import { Button } from '@/components/ui/button'
 
 const props = defineProps({
@@ -105,9 +104,8 @@ const availableFields = computed(() => {
 const chartComponent = computed(() => {
   switch (localConfig.chartType) {
     case 'line':
+    case 'multiline': // Backwards compatibility - multiline is now handled by LineChart
       return LineChart
-    case 'multiline':
-      return MultiLineChart
     case 'area':
       return AreaChart
     case 'donut':

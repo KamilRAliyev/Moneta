@@ -21,7 +21,7 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor } = useChartTheme()
+const { chartColors, textColor, createDropShadow } = useChartTheme()
 
 let resizeObserver = null
 
@@ -38,17 +38,19 @@ const createChart = () => {
   
   if (containerWidth <= 0 || containerHeight <= 0) return
 
-  const width = Math.min(containerWidth, containerHeight)
-  const height = width
-  const radius = Math.min(width, height) / 2 - 40
+  // Use more space - leave room for legend on the right
+  const legendWidth = 200
+  const chartWidth = containerWidth - legendWidth - 40 // Padding
+  const size = Math.min(chartWidth, containerHeight * 0.9) // Use 90% of height
+  const radius = size / 2 - 20 // Larger radius
 
   // Create SVG
   const svg = d3.select(chartContainer.value)
     .append('svg')
-    .attr('width', width)
-    .attr('height', height)
+    .attr('width', containerWidth)
+    .attr('height', containerHeight)
     .append('g')
-    .attr('transform', `translate(${width / 2},${height / 2})`)
+    .attr('transform', `translate(${size / 2 + 20},${containerHeight / 2})`)
 
   // Prepare data
   const data = props.data.labels.map((label, i) => ({
@@ -61,19 +63,44 @@ const createChart = () => {
     .domain(props.data.labels)
     .range(chartColors.value)
 
+  // Create defs for gradients and filters
+  const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
+  
+  // Create radial gradients for each segment
+  props.data.labels.forEach((label, i) => {
+    const segmentColor = chartColors.value[i % chartColors.value.length]
+    const gradient = defs.append('radialGradient')
+      .attr('id', `donut-gradient-${i}`)
+    
+    gradient.append('stop')
+      .attr('offset', '30%')
+      .attr('stop-color', segmentColor)
+      .attr('stop-opacity', 1)
+    
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', segmentColor)
+      .attr('stop-opacity', 0.7)
+  })
+
+  // Create drop shadow
+  createDropShadow(svg, 'donut-shadow')
+
   // Create pie generator
   const pie = d3.pie()
     .value(d => d.value)
     .sort(null)
 
-  // Create arc generator
+  // Create arc generator with rounded corners
   const arc = d3.arc()
     .innerRadius(radius * 0.6) // Donut hole
     .outerRadius(radius)
+    .cornerRadius(6) // Rounded corners for Revolut style
 
   const arcHover = d3.arc()
     .innerRadius(radius * 0.6)
-    .outerRadius(radius + 10)
+    .outerRadius(radius + 12) // Bigger hover effect
+    .cornerRadius(6)
 
   // Create arcs
   const arcs = svg.selectAll('.arc')
@@ -82,13 +109,16 @@ const createChart = () => {
     .append('g')
     .attr('class', 'arc')
 
-  // Add paths with animation
+  // Add paths with animation and gradients
   arcs.append('path')
-    .attr('fill', d => color(d.data.label))
+    .attr('fill', (d, i) => `url(#donut-gradient-${i})`)
     .attr('stroke', 'white')
-    .attr('stroke-width', 2)
+    .attr('stroke-width', 3)
+    .style('filter', 'url(#donut-shadow)')
     .transition()
-    .duration(800)
+    .duration(1000)
+    .delay((d, i) => i * 80) // Staggered animation
+    .ease(d3.easeQuadOut)
     .attrTween('d', function(d) {
       const interpolate = d3.interpolate({ startAngle: 0, endAngle: 0 }, d)
       return function(t) {
@@ -96,33 +126,42 @@ const createChart = () => {
       }
     })
 
-  // Add interactivity
+  // Add interactivity with enhanced Revolut-style hover
   arcs.selectAll('path')
     .on('mouseover', function(event, d) {
       d3.select(this)
         .transition()
         .duration(200)
         .attr('d', arcHover)
+        .style('filter', 'url(#donut-shadow) brightness(1.1)')
 
       // Format value for tooltip (tooltips always show full precision)
       const formattedValue = props.data.currencyCode ?
         formatCurrency(d.data.value, props.data.currencyCode, { compact: false }) :
         d.data.value.toLocaleString()
         
-      // Create tooltip
+      // Create Revolut-style tooltip
       const percentage = ((d.data.value / d3.sum(data, d => d.value)) * 100).toFixed(1)
       const tooltip = d3.select(chartContainer.value)
         .append('div')
         .attr('class', 'chart-tooltip')
         .style('position', 'absolute')
-        .style('background', 'rgba(0, 0, 0, 0.8)')
+        .style('background', 'rgba(0, 0, 0, 0.9)')
+        .style('backdrop-filter', 'blur(10px)')
         .style('color', 'white')
-        .style('padding', '8px')
-        .style('border-radius', '4px')
-        .style('font-size', '12px')
+        .style('padding', '12px 16px')
+        .style('border-radius', '12px')
+        .style('font-size', '13px')
+        .style('font-weight', '500')
         .style('pointer-events', 'none')
         .style('z-index', '1000')
-        .html(`<strong>${d.data.label}</strong><br/>Value: ${formattedValue}<br/>Percentage: ${percentage}%`)
+        .style('box-shadow', '0 8px 16px rgba(0,0,0,0.3)')
+        .style('border', '1px solid rgba(255,255,255,0.1)')
+        .html(`
+          <div style="font-weight: 600; margin-bottom: 4px;">${d.data.label}</div>
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 2px;">${formattedValue}</div>
+          <div style="font-size: 11px; opacity: 0.7;">${percentage}% of total</div>
+        `)
         .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
         .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
     })
@@ -131,11 +170,12 @@ const createChart = () => {
         .transition()
         .duration(200)
         .attr('d', arc)
+        .style('filter', 'url(#donut-shadow)')
 
       d3.select(chartContainer.value).selectAll('.chart-tooltip').remove()
     })
 
-  // Add center text with total
+  // Add center text with total - Enhanced Revolut style
   const total = d3.sum(data, d => d.value)
   const useCompact = props.config.compactNumbers !== false
   const formattedTotal = props.data.currencyCode ?
@@ -145,56 +185,125 @@ const createChart = () => {
       total.toLocaleString()
     )
     
-  svg.append('text')
+  // Animated center text
+  const centerText = svg.append('text')
     .attr('text-anchor', 'middle')
     .attr('dy', '-0.5em')
-    .style('font-size', '24px')
-    .style('font-weight', 'bold')
+    .style('font-size', '28px')
+    .style('font-weight', '700')
     .style('fill', textColor.value || '#000000')
+    .style('opacity', 0)
     .text(formattedTotal)
 
-  svg.append('text')
+  centerText.transition()
+    .delay(800)
+    .duration(600)
+    .style('opacity', 1)
+
+  const centerLabel = svg.append('text')
     .attr('text-anchor', 'middle')
     .attr('dy', '1.5em')
-    .style('font-size', '14px')
+    .style('font-size', '13px')
     .style('fill', textColor.value || '#000000')
-    .style('opacity', 0.7)
+    .style('opacity', 0)
+    .style('font-weight', '500')
     .text('Total')
 
-  // Add legend (if enabled - default to true)
+  centerLabel.transition()
+    .delay(900)
+    .duration(600)
+    .style('opacity', 0.6)
+
+  // Add side legend with values (if enabled - default to true)
   if (props.config.showLegend !== false) {
-    const legendWidth = 120
-    const legendX = width / 2 + radius + 20
+    const legendX = size + 50
+    const legendStartY = (containerHeight - data.length * 40) / 2 // Center vertically
+    
     const legend = d3.select(chartContainer.value)
       .select('svg')
       .append('g')
       .attr('class', 'legend')
-      .attr('transform', `translate(${legendX}, 20)`)
+      .attr('transform', `translate(${legendX}, ${Math.max(legendStartY, 20)})`)
 
     const legendItems = legend.selectAll('.legend-item')
       .data(data)
       .enter()
       .append('g')
       .attr('class', 'legend-item')
-      .attr('transform', (d, i) => `translate(0, ${i * 25})`)
+      .attr('transform', (d, i) => `translate(0, ${i * 40})`)
+      .style('cursor', 'pointer')
 
-    legendItems.append('rect')
-      .attr('width', 15)
-      .attr('height', 15)
-      .attr('rx', 3)
+    // Color indicator
+    legendItems.append('circle')
+      .attr('cx', 8)
+      .attr('cy', 12)
+      .attr('r', 6)
       .attr('fill', d => color(d.label))
 
+    // Label
     legendItems.append('text')
       .attr('x', 20)
       .attr('y', 12)
-      .style('font-size', '12px')
+      .style('font-size', '13px')
+      .style('font-weight', '500')
       .style('fill', textColor.value || '#000000')
       .text(d => {
-        const maxLength = 15
+        const maxLength = 18
         return d.label.length > maxLength 
           ? d.label.substring(0, maxLength) + '...' 
           : d.label
       })
+
+    // Value
+    legendItems.append('text')
+      .attr('x', 20)
+      .attr('y', 28)
+      .style('font-size', '12px')
+      .style('font-weight', '600')
+      .style('fill', textColor.value || '#000000')
+      .style('opacity', 0.7)
+      .text(d => {
+        const useCompact = props.config.compactNumbers !== false
+        if (props.data.currencyCode) {
+          return formatCurrency(d.value, props.data.currencyCode, { compact: useCompact })
+        } else if (useCompact && Math.abs(d.value) >= 1000) {
+          return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d.value)
+        } else {
+          return d.value.toLocaleString()
+        }
+      })
+
+    // Percentage
+    legendItems.append('text')
+      .attr('x', 20)
+      .attr('y', 28)
+      .attr('dx', 60)
+      .style('font-size', '11px')
+      .style('fill', textColor.value || '#000000')
+      .style('opacity', 0.5)
+      .text(d => {
+        const percentage = ((d.value / total) * 100).toFixed(1)
+        return `(${percentage}%)`
+      })
+
+    // Hover effects for legend items
+    legendItems.on('mouseover', function(event, d) {
+      const index = data.indexOf(d)
+      // Highlight corresponding arc
+      arcs.selectAll('path')
+        .filter((arcData, i) => i === index)
+        .transition()
+        .duration(200)
+        .attr('d', arcHover)
+        .style('filter', 'url(#donut-shadow) brightness(1.1)')
+    })
+    .on('mouseout', function() {
+      arcs.selectAll('path')
+        .transition()
+        .duration(200)
+        .attr('d', arc)
+        .style('filter', 'url(#donut-shadow)')
+    })
   }
 }
 
@@ -236,7 +345,7 @@ watch(() => props.config, () => {
 }, { deep: true })
 
 // Watch for theme changes and re-render
-watch([textColor, borderColor], () => {
+watch(textColor, () => {
   nextTick(() => {
     createChart()
   })

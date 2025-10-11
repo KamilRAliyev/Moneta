@@ -346,7 +346,7 @@
                 <BarChart3 class="w-4 h-4 mr-1" />
                 Bar
               </Button>
-              <Button @click="$emit('add-widget', 'chart', 'line')" variant="outline" size="sm">
+              <Button @click="$emit('add-widget', 'chart', 'line')" variant="outline" size="sm" title="Supports single or multiple series">
                 <TrendingUp class="w-4 h-4 mr-1" />
                 Line
               </Button>
@@ -361,10 +361,6 @@
               <Button @click="$emit('add-widget', 'chart', 'treemap')" variant="outline" size="sm">
                 <LayoutGrid class="w-4 h-4 mr-1" />
                 Treemap
-              </Button>
-              <Button @click="$emit('add-widget', 'chart', 'multiline')" variant="outline" size="sm">
-                <GitBranch class="w-4 h-4 mr-1" />
-                Multi-Line
               </Button>
             </div>
           </div>
@@ -399,7 +395,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart, LayoutGrid, GitBranch } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart, LayoutGrid } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'

@@ -21,7 +21,7 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, borderColor } = useChartTheme()
+const { chartColors, textColor, borderColor, createGradient, createDropShadow } = useChartTheme()
 
 let resizeObserver = null
 
@@ -56,8 +56,10 @@ const createChart = () => {
     .range([0, width])
     .padding(0.2)
 
+  // Use extent to handle both positive and negative values
+  const [minValue, maxValue] = d3.extent(props.data.values)
   const y = d3.scaleLinear()
-    .domain([0, d3.max(props.data.values) || 0])
+    .domain([Math.min(0, minValue || 0), Math.max(0, maxValue || 0)])
     .nice()
     .range([height, 0])
 
@@ -88,14 +90,65 @@ const createChart = () => {
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
 
-  // Style axis lines
+  // Style axis lines - subtle Revolut style
   svg.selectAll('.domain')
     .style('stroke', borderColor.value || '#cccccc')
 
   svg.selectAll('.tick line')
     .style('stroke', borderColor.value || '#cccccc')
+    .style('opacity', 0.2)
+    .style('stroke-dasharray', '2,2')
 
-  // Add bars with animation (Revolut style)
+  // Add horizontal grid lines for better readability
+  svg.append('g')
+    .attr('class', 'grid')
+    .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
+    .style('stroke', borderColor.value || '#cccccc')
+    .style('stroke-opacity', 0.1)
+    .style('stroke-dasharray', '2,2')
+    .selectAll('.domain')
+    .remove()
+
+  // Create gradients for bars
+  const defs = svg.append('defs')
+  props.data.values.forEach((d, i) => {
+    const color = chartColors.value[i % chartColors.value.length]
+    const gradient = defs.append('linearGradient')
+      .attr('id', `bar-gradient-${i}`)
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '0%')
+      .attr('y2', '100%')
+    
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.9)
+    
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.6)
+  })
+
+  // Create drop shadow filter
+  createDropShadow(svg, 'bar-shadow')
+
+  // Get the zero line position
+  const zeroY = y(0)
+
+  // Add a visible zero baseline
+  svg.append('line')
+    .attr('x1', 0)
+    .attr('x2', width)
+    .attr('y1', zeroY)
+    .attr('y2', zeroY)
+    .attr('stroke', textColor.value || '#000000')
+    .attr('stroke-width', 2)
+    .attr('opacity', 0.4)
+    .attr('stroke-dasharray', '0') // Solid line for zero
+
+  // Add bars with animation (Revolut style) - handles positive and negative values
   const bars = svg.selectAll('.bar')
     .data(props.data.values)
     .enter()
@@ -103,18 +156,20 @@ const createChart = () => {
     .attr('class', 'bar')
     .attr('x', (d, i) => x(props.data.labels[i]))
     .attr('width', x.bandwidth())
-    .attr('y', height)
+    .attr('y', zeroY)
     .attr('height', 0)
-    .attr('fill', (d, i) => chartColors.value[i % chartColors.value.length] || '#0075FF')
+    .attr('fill', (d, i) => `url(#bar-gradient-${i})`)
     .attr('rx', 8)
-    .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))')
+    .attr('ry', 8)
+    .style('filter', 'url(#bar-shadow)')
 
-  // Animate bars with Revolut easing
+  // Animate bars with Revolut easing - staggered for dramatic effect
   bars.transition()
     .duration(800)
-    .ease(d3.easeCubicInOut)
-    .attr('y', d => y(d))
-    .attr('height', d => height - y(d))
+    .delay((d, i) => i * 50) // Staggered animation
+    .ease(d3.easeQuadOut)
+    .attr('y', d => d >= 0 ? y(d) : zeroY)
+    .attr('height', d => Math.abs(y(d) - zeroY))
 
   // Add tooltips with enhanced hover (Revolut style)
   bars.on('mouseover', function(event, d) {
@@ -122,8 +177,9 @@ const createChart = () => {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('opacity', 0.8)
-      .style('filter', 'drop-shadow(0 4px 8px rgba(0,0,0,0.2)) brightness(1.05)')
+      .attr('transform', 'scale(1.05)')
+      .attr('transform-origin', 'center')
+      .style('filter', 'url(#bar-shadow) brightness(1.1)')
 
     // Format value for tooltip (tooltips always show full precision)
     const formattedValue = props.data.currencyCode ?
@@ -152,8 +208,8 @@ const createChart = () => {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('opacity', 1)
-      .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))')
+      .attr('transform', 'scale(1)')
+      .style('filter', 'url(#bar-shadow)')
 
     d3.select(chartContainer.value).selectAll('.chart-tooltip').remove()
   })

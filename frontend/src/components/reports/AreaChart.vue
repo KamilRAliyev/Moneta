@@ -6,12 +6,13 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ labels: [], values: [] })
+    default: () => ({ labels: [], values: [], isCurrencyGrouped: false, currencyCode: null })
   },
   config: {
     type: Object,
@@ -20,7 +21,7 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, borderColor } = useChartTheme()
+const { chartColors, textColor, borderColor, createGlowFilter } = useChartTheme()
 
 let resizeObserver = null
 
@@ -58,14 +59,17 @@ const createChart = () => {
     .range([0, width])
     .padding(0.1)
 
+  // Use extent to handle both positive and negative values
+  const [minValue, maxValue] = d3.extent(props.data.values)
   const y = d3.scaleLinear()
-    .domain([0, d3.max(props.data.values) || 0])
+    .domain([Math.min(0, minValue || 0), Math.max(0, maxValue || 0)])
     .nice()
     .range([height, 0])
 
-  // Define gradient for Revolut-style fill
-  const gradient = svg.append('defs')
-    .append('linearGradient')
+  // Define gradient for Revolut-style fill - more vibrant
+  const defs = svg.append('defs')
+  
+  const gradient = defs.append('linearGradient')
     .attr('id', 'area-gradient')
     .attr('x1', '0%')
     .attr('y1', '0%')
@@ -75,26 +79,29 @@ const createChart = () => {
   gradient.append('stop')
     .attr('offset', '0%')
     .attr('stop-color', chartColors.value[0] || '#0075FF')
-    .attr('stop-opacity', 0.6)
+    .attr('stop-opacity', 0.5)
 
   gradient.append('stop')
     .attr('offset', '100%')
     .attr('stop-color', chartColors.value[0] || '#0075FF')
-    .attr('stop-opacity', 0.05)
+    .attr('stop-opacity', 0)
+
+  // Create glow filter for the line
+  createGlowFilter(svg, 'area-line-glow')
 
   // Add subtle grid lines (Revolut style)
   svg.append('g')
     .attr('class', 'grid')
-    .attr('opacity', 0.05)
+    .attr('opacity', 0.1)
     .call(d3.axisLeft(y)
       .tickSize(-width)
       .tickFormat('')
     )
     .selectAll('line')
     .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-dasharray', '3,3')
+    .style('stroke-dasharray', '2,2')
 
-  // No axis lines, only labels (Revolut style)
+  // X axis with subtle tick lines
   svg.append('g')
     .attr('transform', `translate(0,${height})`)
     .call(d3.axisBottom(x).tickSize(0))
@@ -105,20 +112,45 @@ const createChart = () => {
     .style('font-size', '12px')
     .style('font-weight', '500')
 
+  // Y axis with currency formatting if applicable
+  const useCompact = props.config.compactNumbers !== false
+  const yAxisFormat = props.data.currencyCode ? 
+    (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
+    (d) => {
+      if (useCompact && Math.abs(d) >= 1000) {
+        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+      }
+      return d.toLocaleString()
+    }
+
   svg.append('g')
-    .call(d3.axisLeft(y).tickSize(0))
+    .call(d3.axisLeft(y).tickSize(0).tickFormat(yAxisFormat))
     .selectAll('text')
     .style('fill', textColor.value || '#000000')
     .style('font-size', '12px')
     .style('font-weight', '500')
 
-  // Remove domain lines
+  // Remove domain lines for clean Revolut look
   svg.selectAll('.domain').remove()
 
-  // Create area generator with smooth curve
+  // Get the zero line position
+  const zeroY = y(0)
+
+  // Add a visible zero baseline
+  svg.append('line')
+    .attr('x1', 0)
+    .attr('x2', width)
+    .attr('y1', zeroY)
+    .attr('y2', zeroY)
+    .attr('stroke', textColor.value || '#000000')
+    .attr('stroke-width', 2)
+    .attr('opacity', 0.4)
+    .attr('stroke-dasharray', '0') // Solid line for zero
+
+  // Create area generator with smooth curve - handles negative values
   const area = d3.area()
     .x(d => x(d.label))
-    .y0(height)
+    .y0(zeroY) // Start from zero line, not bottom
     .y1(d => y(d.value))
     .curve(d3.curveMonotoneX)
 
@@ -135,13 +167,13 @@ const createChart = () => {
     .attr('d', area)
     .attr('opacity', 0)
 
-  // Animate area
+  // Animate area with fade-in
   areaPath.transition()
-    .duration(800)
-    .ease(d3.easeCubicInOut)
+    .duration(1000)
+    .ease(d3.easeQuadOut)
     .attr('opacity', 1)
 
-  // Add line path (thicker, Revolut style)
+  // Add line path with glow effect (thicker, Revolut style)
   const linePath = svg.append('path')
     .datum(data)
     .attr('fill', 'none')
@@ -149,19 +181,20 @@ const createChart = () => {
     .attr('stroke-width', 3)
     .attr('stroke-linecap', 'round')
     .attr('stroke-linejoin', 'round')
+    .attr('filter', 'url(#area-line-glow)')
     .attr('d', line)
 
-  // Animate the line
+  // Animate the line with drawing effect
   const totalLength = linePath.node().getTotalLength()
   linePath
     .attr('stroke-dasharray', totalLength + ' ' + totalLength)
     .attr('stroke-dashoffset', totalLength)
     .transition()
-    .duration(1000)
-    .ease(d3.easeCubicInOut)
+    .duration(1200)
+    .ease(d3.easeQuadOut)
     .attr('stroke-dashoffset', 0)
 
-  // Add dots with glow effect
+  // Add dots with enhanced glow effect
   const dots = svg.selectAll('.dot')
     .data(data)
     .enter()
@@ -173,13 +206,14 @@ const createChart = () => {
     .attr('fill', chartColors.value[0] || '#0075FF')
     .attr('stroke', 'white')
     .attr('stroke-width', 2)
-    .style('filter', 'drop-shadow(0 0 4px rgba(0, 117, 255, 0.3))')
+    .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))')
+    .style('cursor', 'pointer')
 
-  // Animate dots
+  // Animate dots with stagger
   dots.transition()
-    .delay((d, i) => i * 50)
+    .delay((d, i) => 1000 + i * 40)
     .duration(300)
-    .attr('r', 4)
+    .attr('r', 5)
 
   // Add interactive tooltips with crosshair
   const focus = svg.append('g')
@@ -194,33 +228,44 @@ const createChart = () => {
     .attr('y1', 0)
     .attr('y2', height)
 
-  // Add hover interactions
+  // Add enhanced hover interactions
   dots.on('mouseover', function(event, d) {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('r', 6)
-      .style('filter', 'drop-shadow(0 0 8px rgba(0, 117, 255, 0.6))')
+      .attr('r', 10)
+      .attr('stroke-width', 3)
 
     focus.style('display', null)
     focus.select('.crosshair-line')
       .attr('x1', x(d.label))
       .attr('x2', x(d.label))
 
-    // Create tooltip
+    // Format value for tooltip
+    const formattedValue = props.data.currencyCode ?
+      formatCurrency(d.value, props.data.currencyCode, { compact: false }) :
+      d.value.toLocaleString()
+
+    // Create Revolut-style tooltip
     const tooltip = d3.select(chartContainer.value)
       .append('div')
       .attr('class', 'chart-tooltip')
       .style('position', 'absolute')
-      .style('background', 'rgba(0, 0, 0, 0.8)')
+      .style('background', 'rgba(0, 0, 0, 0.9)')
+      .style('backdrop-filter', 'blur(10px)')
       .style('color', 'white')
-      .style('padding', '8px 12px')
-      .style('border-radius', '6px')
-      .style('font-size', '12px')
+      .style('padding', '12px 16px')
+      .style('border-radius', '12px')
+      .style('font-size', '13px')
       .style('font-weight', '500')
       .style('pointer-events', 'none')
       .style('z-index', '1000')
-      .html(`<strong>${d.label}</strong><br/>Value: ${d.value.toLocaleString()}`)
+      .style('box-shadow', '0 8px 16px rgba(0,0,0,0.3)')
+      .style('border', '1px solid rgba(255,255,255,0.1)')
+      .html(`
+        <div style="margin-bottom: 4px; font-size: 11px; opacity: 0.7;">${d.label}</div>
+        <div style="font-size: 16px; font-weight: 600;">${formattedValue}</div>
+      `)
       .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
       .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
   })
@@ -228,8 +273,8 @@ const createChart = () => {
     d3.select(this)
       .transition()
       .duration(200)
-      .attr('r', 4)
-      .style('filter', 'drop-shadow(0 0 4px rgba(0, 117, 255, 0.3))')
+      .attr('r', 5)
+      .attr('stroke-width', 2)
 
     focus.style('display', 'none')
     d3.select(chartContainer.value).selectAll('.chart-tooltip').remove()

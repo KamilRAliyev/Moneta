@@ -66,16 +66,33 @@ export function useChartTheme() {
   }
 
   /**
-   * Get chart color palette
+   * Revolut-inspired vibrant color palette
+   * Vibrant, highly distinguishable colors for professional data visualization
+   */
+  const revolutColors = [
+    '#4F46E5', // Vibrant Indigo
+    '#EC4899', // Hot Pink
+    '#10B981', // Emerald
+    '#F59E0B', // Amber
+    '#8B5CF6', // Purple
+    '#14B8A6', // Teal
+    '#EF4444', // Red
+    '#3B82F6', // Blue
+    '#F97316', // Orange
+    '#06B6D4', // Cyan
+    '#A855F7', // Violet
+    '#84CC16', // Lime
+    '#6366F1', // Indigo lighter
+    '#DB2777', // Pink darker
+    '#059669'  // Green darker
+  ]
+
+  /**
+   * Get chart color palette - prefers Revolut colors, falls back to theme
    */
   const chartColors = computed(() => {
-    return [
-      getColor('--chart-1'),
-      getColor('--chart-2'),
-      getColor('--chart-3'),
-      getColor('--chart-4'),
-      getColor('--chart-5')
-    ].filter(c => c)
+    // Always use Revolut colors for consistent, beautiful visualization
+    return revolutColors
   })
 
   /**
@@ -132,13 +149,126 @@ export function useChartTheme() {
     return isDark ? '#09090b' : '#ffffff'
   })
 
+  /**
+   * Create gradient definition for Revolut-style fills
+   * @param {object} svg - D3 SVG selection
+   * @param {string} id - Unique ID for gradient
+   * @param {string} color - Base color
+   * @param {string} direction - 'vertical' or 'horizontal' or 'radial'
+   */
+  const createGradient = (svg, id, color, direction = 'vertical') => {
+    if (direction === 'radial') {
+      const gradient = svg.append('defs')
+        .append('radialGradient')
+        .attr('id', id)
+      
+      gradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', color)
+        .attr('stop-opacity', 0.8)
+      
+      gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', color)
+        .attr('stop-opacity', 0.3)
+      
+      return `url(#${id})`
+    }
+    
+    // Linear gradient
+    const gradient = svg.append('defs')
+      .append('linearGradient')
+      .attr('id', id)
+      .attr('x1', direction === 'vertical' ? '0%' : '0%')
+      .attr('y1', direction === 'vertical' ? '0%' : '50%')
+      .attr('x2', direction === 'vertical' ? '0%' : '100%')
+      .attr('y2', direction === 'vertical' ? '100%' : '50%')
+    
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.4)
+    
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.05)
+    
+    return `url(#${id})`
+  }
+
+  /**
+   * Create glow filter for Revolut-style glowing lines
+   * @param {object} svg - D3 SVG selection
+   * @param {string} id - Unique ID for filter
+   */
+  const createGlowFilter = (svg, id) => {
+    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
+    
+    const filter = defs.append('filter')
+      .attr('id', id)
+      .attr('height', '300%')
+      .attr('width', '300%')
+      .attr('x', '-75%')
+      .attr('y', '-75%')
+    
+    // Gaussian blur
+    filter.append('feGaussianBlur')
+      .attr('stdDeviation', '3')
+      .attr('result', 'coloredBlur')
+    
+    // Merge with original
+    const feMerge = filter.append('feMerge')
+    feMerge.append('feMergeNode').attr('in', 'coloredBlur')
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+    
+    return `url(#${id})`
+  }
+
+  /**
+   * Create drop shadow filter for depth
+   * @param {object} svg - D3 SVG selection  
+   * @param {string} id - Unique ID for filter
+   */
+  const createDropShadow = (svg, id) => {
+    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
+    
+    const filter = defs.append('filter')
+      .attr('id', id)
+      .attr('height', '130%')
+    
+    filter.append('feGaussianBlur')
+      .attr('in', 'SourceAlpha')
+      .attr('stdDeviation', '2')
+    
+    filter.append('feOffset')
+      .attr('dx', '0')
+      .attr('dy', '2')
+      .attr('result', 'offsetblur')
+    
+    filter.append('feComponentTransfer')
+      .append('feFuncA')
+      .attr('type', 'linear')
+      .attr('slope', '0.2')
+    
+    const feMerge = filter.append('feMerge')
+    feMerge.append('feMergeNode')
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic')
+    
+    return `url(#${id})`
+  }
+
   return {
     chartColors,
     getChartColor,
     textColor,
     mutedTextColor,
     borderColor,
-    backgroundColor
+    backgroundColor,
+    revolutColors,
+    createGradient,
+    createGlowFilter,
+    createDropShadow
   }
 }
 

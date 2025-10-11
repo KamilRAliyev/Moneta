@@ -21,7 +21,7 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor } = useChartTheme()
+const { chartColors, textColor, createDropShadow } = useChartTheme()
 
 let resizeObserver = null
 
@@ -58,18 +58,45 @@ const createChart = () => {
     .sum(d => d.value)
     .sort((a, b) => b.value - a.value)
 
-  // Create treemap layout
+  // Create treemap layout with more padding
   const treemap = d3.treemap()
     .size([width, height])
-    .padding(2)
+    .padding(4) // Increased padding for better separation
     .round(true)
 
   treemap(root)
+
+  // Create defs for gradients and filters
+  const defs = svg.append('defs')
+  
+  // Create drop shadow
+  createDropShadow(svg, 'treemap-shadow')
 
   // Create color scale
   const colorScale = d3.scaleOrdinal()
     .domain(props.data.labels)
     .range(chartColors.value)
+
+  // Create gradients for each tile
+  props.data.labels.forEach((label, i) => {
+    const color = chartColors.value[i % chartColors.value.length]
+    const gradient = defs.append('linearGradient')
+      .attr('id', `treemap-gradient-${i}`)
+      .attr('x1', '0%')
+      .attr('y1', '0%')
+      .attr('x2', '100%')
+      .attr('y2', '100%')
+    
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.95)
+    
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0.75)
+  })
 
   // Create cells
   const cell = svg.selectAll('g')
@@ -78,32 +105,35 @@ const createChart = () => {
     .append('g')
     .attr('transform', d => `translate(${d.x0},${d.y0})`)
 
-  // Add rectangles with rounded corners
+  // Add rectangles with rounded corners and gradients - faster animation
   cell.append('rect')
-    .attr('width', d => Math.max(0, d.x1 - d.x0)) // Ensure non-negative
-    .attr('height', d => Math.max(0, d.y1 - d.y0)) // Ensure non-negative
-    .attr('fill', d => colorScale(d.data.name))
-    .attr('rx', 6)
-    .attr('ry', 6)
+    .attr('width', d => Math.max(0, d.x1 - d.x0))
+    .attr('height', d => Math.max(0, d.y1 - d.y0))
+    .attr('fill', (d, i) => `url(#treemap-gradient-${i})`)
+    .attr('rx', 8)
+    .attr('ry', 8)
     .attr('opacity', 0)
-    .style('stroke', 'white')
+    .style('stroke', 'rgba(255,255,255,0.3)')
     .style('stroke-width', 2)
+    .style('filter', 'url(#treemap-shadow)')
+    .style('cursor', 'pointer')
     .transition()
-    .duration(800)
-    .ease(d3.easeCubicInOut)
-    .attr('opacity', 0.9)
+    .duration(600) // Faster animation
+    .delay((d, i) => i * 20) // Reduced stagger delay
+    .ease(d3.easeQuadOut)
+    .attr('opacity', 1)
 
-  // Add labels
+  // Add labels with enhanced styling - faster animation
   cell.append('text')
-    .attr('x', 8)
-    .attr('y', 20)
+    .attr('x', 10)
+    .attr('y', 22)
     .style('font-size', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? '14px' : width > 60 ? '12px' : '10px'
+      return width > 100 ? '15px' : width > 60 ? '13px' : '11px'
     })
-    .style('font-weight', '600')
+    .style('font-weight', '700')
     .style('fill', 'white')
-    .style('text-shadow', '0 1px 2px rgba(0,0,0,0.3)')
+    .style('text-shadow', '0 2px 4px rgba(0,0,0,0.5)')
     .text(d => {
       const width = d.x1 - d.x0
       const maxLength = width > 100 ? 20 : width > 60 ? 12 : 8
@@ -113,26 +143,26 @@ const createChart = () => {
     })
     .attr('opacity', 0)
     .transition()
-    .duration(800)
-    .delay(200)
+    .duration(500) // Faster
+    .delay((d, i) => 200 + i * 20) // Reduced delay
     .attr('opacity', 1)
 
-  // Add values
+  // Add values with enhanced typography - faster animation
   cell.append('text')
-    .attr('x', 8)
+    .attr('x', 10)
     .attr('y', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? 40 : width > 60 ? 30 : 24
+      return width > 100 ? 44 : width > 60 ? 34 : 28
     })
     .style('font-size', d => {
       const width = d.x1 - d.x0
-      return width > 100 ? '18px' : width > 60 ? '14px' : '11px'
+      return width > 100 ? '20px' : width > 60 ? '16px' : '12px'
     })
-    .style('font-weight', 'bold')
+    .style('font-weight', '800')
     .style('fill', 'white')
-    .style('text-shadow', '0 1px 2px rgba(0,0,0,0.3)')
+    .style('text-shadow', '0 2px 4px rgba(0,0,0,0.5)')
     .text(d => {
-      const useCompact = props.config.compactNumbers !== false // Default to true
+      const useCompact = props.config.compactNumbers !== false
       if (props.data.currencyCode) {
         return formatCurrency(d.value, props.data.currencyCode, { compact: useCompact })
       } else if (useCompact && Math.abs(d.value) >= 1000) {
@@ -143,60 +173,69 @@ const createChart = () => {
     })
     .attr('opacity', 0)
     .transition()
-    .duration(800)
-    .delay(400)
+    .duration(500) // Faster
+    .delay((d, i) => 300 + i * 20) // Reduced delay
     .attr('opacity', 1)
 
-  // Add percentage labels
+  // Add percentage labels with enhanced styling - faster animation
   const total = d3.sum(props.data.values, d => Math.abs(d))
   cell.append('text')
-    .attr('x', 8)
+    .attr('x', 10)
     .attr('y', d => {
       const width = d.x1 - d.x0
       const height = d.y1 - d.y0
-      return height > 60 ? (width > 100 ? 58 : 45) : height - 10
+      return height > 60 ? (width > 100 ? 64 : 50) : height - 12
     })
-    .style('font-size', '11px')
-    .style('font-weight', '500')
-    .style('fill', 'rgba(255,255,255,0.8)')
-    .style('text-shadow', '0 1px 2px rgba(0,0,0,0.3)')
+    .style('font-size', '12px')
+    .style('font-weight', '600')
+    .style('fill', 'rgba(255,255,255,0.85)')
+    .style('text-shadow', '0 2px 3px rgba(0,0,0,0.4)')
     .text(d => {
       const percentage = ((d.value / total) * 100).toFixed(1)
       return `${percentage}%`
     })
     .attr('opacity', 0)
     .transition()
-    .duration(800)
-    .delay(600)
+    .duration(500) // Faster
+    .delay((d, i) => 400 + i * 20) // Reduced delay
     .attr('opacity', 1)
 
-  // Add hover effects
+  // Add enhanced hover effects with scale transform
   cell.selectAll('rect')
     .on('mouseover', function(event, d) {
+      const parent = d3.select(this.parentNode)
+      
       d3.select(this)
         .transition()
         .duration(200)
-        .attr('opacity', 1)
-        .style('stroke-width', 3)
-        .style('filter', 'brightness(1.1) drop-shadow(0 4px 8px rgba(0,0,0,0.2))')
+        .style('stroke', 'rgba(255,255,255,0.8)')
+        .style('stroke-width', 4)
+        .style('filter', 'url(#treemap-shadow) brightness(1.15)')
 
-      // Create tooltip
+      // Brighten text on hover
+      parent.selectAll('text')
+        .transition()
+        .duration(200)
+        .style('text-shadow', '0 2px 6px rgba(0,0,0,0.7)')
+
+      // Create Revolut-style tooltip
       const percentage = ((d.value / total) * 100).toFixed(1)
       const tooltip = d3.select(chartContainer.value)
         .append('div')
         .attr('class', 'chart-tooltip')
         .style('position', 'absolute')
-        .style('background', 'rgba(0, 0, 0, 0.9)')
+        .style('background', 'rgba(0, 0, 0, 0.95)')
+        .style('backdrop-filter', 'blur(10px)')
         .style('color', 'white')
-        .style('padding', '12px 16px')
-        .style('border-radius', '8px')
+        .style('padding', '14px 18px')
+        .style('border-radius', '14px')
         .style('font-size', '13px')
         .style('font-weight', '500')
         .style('pointer-events', 'none')
         .style('z-index', '1000')
-        .style('box-shadow', '0 4px 12px rgba(0,0,0,0.3)')
+        .style('box-shadow', '0 8px 20px rgba(0,0,0,0.4)')
+        .style('border', '1px solid rgba(255,255,255,0.15)')
         .html(() => {
-          // Tooltips always show full precision
           let formattedValue
           if (props.data.currencyCode) {
             formattedValue = formatCurrency(d.value, props.data.currencyCode, { compact: false })
@@ -204,21 +243,28 @@ const createChart = () => {
             formattedValue = d.value.toLocaleString()
           }
           return `
-            <div style="font-weight: 600; margin-bottom: 4px;">${d.data.name}</div>
-            <div>Value: <strong>${formattedValue}</strong></div>
-            <div>Percentage: <strong>${percentage}%</strong></div>
+            <div style="font-weight: 700; margin-bottom: 6px; font-size: 14px;">${d.data.name}</div>
+            <div style="font-size: 18px; font-weight: 800; margin-bottom: 4px;">${formattedValue}</div>
+            <div style="font-size: 12px; opacity: 0.8;">${percentage}% of total</div>
           `
         })
         .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
         .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
     })
     .on('mouseout', function() {
+      const parent = d3.select(this.parentNode)
+      
       d3.select(this)
         .transition()
         .duration(200)
-        .attr('opacity', 0.9)
+        .style('stroke', 'rgba(255,255,255,0.3)')
         .style('stroke-width', 2)
-        .style('filter', 'none')
+        .style('filter', 'url(#treemap-shadow)')
+
+      parent.selectAll('text')
+        .transition()
+        .duration(200)
+        .style('text-shadow', '0 2px 4px rgba(0,0,0,0.5)')
 
       d3.select(chartContainer.value).selectAll('.chart-tooltip').remove()
     })
