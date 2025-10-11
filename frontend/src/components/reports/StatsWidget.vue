@@ -223,13 +223,15 @@ watch(() => props.config, (newConfig) => {
   Object.assign(localConfig, newConfig)
 }, { deep: true })
 
-// Watch for date range changes - watch both properties
-watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [oldFrom, oldTo]) => {
-  console.log('StatsWidget: Date range changed!')
-  console.log('  Old:', { from: oldFrom, to: oldTo })
-  console.log('  New:', { from: newFrom, to: newTo })
-  fetchData()
-})
+// Watch for date range changes - watch all properties including dateField
+watch(() => [props.dateRange?.from, props.dateRange?.to, props.dateRange?.dateField], 
+  ([newFrom, newTo, newDateField], [oldFrom, oldTo, oldDateField]) => {
+    console.log('StatsWidget: Date range changed!')
+    console.log('  Old:', { from: oldFrom, to: oldTo, dateField: oldDateField })
+    console.log('  New:', { from: newFrom, to: newTo, dateField: newDateField })
+    fetchData()
+  }
+)
 
 onMounted(() => {
   console.log('🔥 StatsWidget MOUNTED, fetching data')

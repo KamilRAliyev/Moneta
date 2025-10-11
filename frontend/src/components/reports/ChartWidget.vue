@@ -241,13 +241,15 @@ watch(() => [localConfig.currency_mode, localConfig.currency_field, localConfig.
   fetchChartData()
 })
 
-// Watch for date range changes - watch both properties
-watch(() => [props.dateRange?.from, props.dateRange?.to], ([newFrom, newTo], [oldFrom, oldTo]) => {
-  console.log('ChartWidget: Date range changed!')
-  console.log('  Old:', { from: oldFrom, to: oldTo })
-  console.log('  New:', { from: newFrom, to: newTo })
-  fetchChartData()
-})
+// Watch for date range changes - watch all properties including dateField
+watch(() => [props.dateRange?.from, props.dateRange?.to, props.dateRange?.dateField], 
+  ([newFrom, newTo, newDateField], [oldFrom, oldTo, oldDateField]) => {
+    console.log('ChartWidget: Date range changed!')
+    console.log('  Old:', { from: oldFrom, to: oldTo, dateField: oldDateField })
+    console.log('  New:', { from: newFrom, to: newTo, dateField: newDateField })
+    fetchChartData()
+  }
+)
 
 // Lifecycle
 onMounted(() => {
