@@ -26,13 +26,13 @@ export const reportsApi = {
     return axios.delete(`/reports/${id}/`)
   },
 
-  // Get report data for widgets
-  getReportData(id) {
-    return axios.get(`/reports/${id}/data/`)
-  },
-
   // Get aggregated data for charts
   getAggregatedData(params) {
     return axios.get('/reports/data/aggregated/', { params })
+  },
+
+  // Get transaction metadata (available columns)
+  getTransactionMetadata() {
+    return axios.get('/transactions/metadata')
   }
 }

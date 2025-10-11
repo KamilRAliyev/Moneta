@@ -29,6 +29,12 @@ export const navigationItems = [
     component: () => import('@/views/ComputedFieldRules.vue')
   },
   {
+    name: "Reports",
+    path: "/reports",
+    icon: "BarChart3",
+    component: () => import('@/views/Reports.vue')
+  },
+  {
     name: "Settings",
     path: "/settings", 
     icon: "Settings",
