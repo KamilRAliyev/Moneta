@@ -64,6 +64,12 @@ import LineChart from './LineChart.vue'
 import DonutChart from './DonutChart.vue'
 import AreaChart from './AreaChart.vue'
 import TreemapChart from './TreemapChart.vue'
+import ScatterChart from './ScatterChart.vue'
+import BubbleChart from './BubbleChart.vue'
+import StackedBarChart from './StackedBarChart.vue'
+import WaterfallChart from './WaterfallChart.vue'
+import HeatmapChart from './HeatmapChart.vue'
+import SankeyChart from './SankeyChart.vue'
 import { Button } from '@/components/ui/button'
 
 const props = defineProps({
@@ -112,6 +118,18 @@ const chartComponent = computed(() => {
       return DonutChart
     case 'treemap':
       return TreemapChart
+    case 'scatter':
+      return ScatterChart
+    case 'bubble':
+      return BubbleChart
+    case 'stacked':
+      return StackedBarChart
+    case 'waterfall':
+      return WaterfallChart
+    case 'heatmap':
+      return HeatmapChart
+    case 'sankey':
+      return SankeyChart
     case 'bar':
     default:
       return BarChart

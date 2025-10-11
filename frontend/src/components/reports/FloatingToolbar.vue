@@ -88,7 +88,12 @@
                 <SelectItem value="donut">Donut Chart</SelectItem>
                 <SelectItem value="area">Area Chart</SelectItem>
                 <SelectItem value="treemap">Treemap</SelectItem>
-                <SelectItem value="multiline">Multi-Line Chart</SelectItem>
+                <SelectItem value="scatter">Scatter Plot</SelectItem>
+                <SelectItem value="bubble">Bubble Chart</SelectItem>
+                <SelectItem value="stacked">Stacked Bar</SelectItem>
+                <SelectItem value="waterfall">Waterfall</SelectItem>
+                <SelectItem value="heatmap">Heatmap</SelectItem>
+                <SelectItem value="sankey">Sankey Diagram</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -350,6 +355,7 @@
               {{ field.name }}
             </span>
           </div>
+
           <div class="flex items-center gap-3 text-xs text-muted-foreground pt-1">
             <div class="flex items-center gap-1">
               <div class="w-2 h-2 rounded-full bg-green-500"></div>
@@ -362,11 +368,13 @@
           </div>
         </div>
 
+        <hr>
+
         <!-- Widget Actions (Edit Mode) -->
         <div v-if="isEditMode" class="space-y-3">
-          <!-- Chart Widgets -->
+          <!-- Chart Widgets - Basic -->
           <div>
-            <Label class="text-xs text-muted-foreground mb-2 block">Chart Widgets</Label>
+            <Label class="text-xs text-muted-foreground mb-2 block">Basic Charts</Label>
             <div class="grid grid-cols-2 gap-2">
               <Button @click="$emit('add-widget', 'chart', 'bar')" variant="outline" size="sm">
                 <BarChart3 class="w-4 h-4 mr-1" />
@@ -381,8 +389,39 @@
                 Donut
               </Button>
               <Button @click="$emit('add-widget', 'chart', 'area')" variant="outline" size="sm">
-                <AreaChart class="w-4 h-4 mr-1" />
+                <AreaChartIcon class="w-4 h-4 mr-1" />
                 Area
+              </Button>
+            </div>
+          </div>
+
+          <!-- Chart Widgets - Advanced -->
+          <div>
+            <Label class="text-xs text-muted-foreground mb-2 block">Advanced Charts</Label>
+            <div class="grid grid-cols-2 gap-2">
+              <Button @click="$emit('add-widget', 'chart', 'scatter')" variant="outline" size="sm">
+                <GitBranch class="w-4 h-4 mr-1" />
+                Scatter
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'bubble')" variant="outline" size="sm">
+                <Circle class="w-4 h-4 mr-1" />
+                Bubble
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'stacked')" variant="outline" size="sm">
+                <BarChart2 class="w-4 h-4 mr-1" />
+                Stacked
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'waterfall')" variant="outline" size="sm">
+                <TrendingDown class="w-4 h-4 mr-1" />
+                Waterfall
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'heatmap')" variant="outline" size="sm">
+                <Grid3X3 class="w-4 h-4 mr-1" />
+                Heatmap
+              </Button>
+              <Button @click="$emit('add-widget', 'chart', 'sankey')" variant="outline" size="sm">
+                <GitMerge class="w-4 h-4 mr-1" />
+                Sankey
               </Button>
               <Button @click="$emit('add-widget', 'chart', 'treemap')" variant="outline" size="sm">
                 <LayoutGrid class="w-4 h-4 mr-1" />
@@ -421,7 +460,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart, LayoutGrid } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
