@@ -140,6 +140,17 @@
         @update-global-filters="updateGlobalFilters"
       />
       
+      <!-- Reopen Sidebar Button (when closed in edit mode) -->
+      <Button
+        v-if="isEditMode && persistence.sidebarMode.value === 'sidebar' && !sidebarOpen"
+        @click="sidebarOpen = true"
+        class="fixed top-20 right-4 z-50 shadow-lg"
+        size="icon"
+        title="Open Controls"
+      >
+        <PanelRightOpen class="w-4 h-4" />
+      </Button>
+      
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center items-center h-64">
         <div class="text-muted-foreground">Loading...</div>
@@ -162,12 +173,12 @@
         <GridLayout
           v-model:layout="layout"
           :col-num="12"
-          :row-height="60"
+          :row-height="50"
           :is-draggable="isEditMode"
           :is-resizable="isEditMode"
           :is-mirrored="false"
           :vertical-compact="true"
-          :margin="[10, 10]"
+          :margin="[8, 8]"
           :use-css-transforms="true"
           @layout-updated="onLayoutUpdated"
         >
@@ -181,8 +192,8 @@
             :i="item.i"
             :static="!isEditMode"
           >
-            <Card class="h-full">
-              <CardContent class="p-4 h-full overflow-auto">
+            <Card class="h-full" :class="{ 'border-2 border-dashed border-primary/30': isEditMode, 'border-0': !isEditMode }">
+              <CardContent class="h-full overflow-auto" :class="isEditMode ? 'p-2' : 'p-3'">
                 <!-- Chart Widget -->
                 <ChartWidget
                   v-if="item.type === 'chart'"
@@ -195,6 +206,7 @@
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
                   @configure="() => openWidgetConfig(item)"
+                  @copy="() => copyWidget(item)"
                 />
                 
                 <!-- Stats Widget -->
@@ -209,6 +221,7 @@
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
                   @configure="() => openWidgetConfig(item)"
+                  @copy="() => copyWidget(item)"
                 />
                 
                 <!-- Heading Widget -->
@@ -294,6 +307,19 @@
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
                 />
+                
+                <!-- Filter Widget -->
+                <FilterWidget
+                  v-else-if="item.type === 'filter'"
+                  :config="item.config"
+                  :is-edit-mode="isEditMode"
+                  :metadata="metadata"
+                  @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
+                  @filter-apply="(filter) => applyFilterFromWidget(filter)"
+                  @filter-remove="(filter) => removeFilterFromWidget(filter)"
+                  @remove="() => removeWidget(item.i)"
+                  @copy="() => copyWidget(item)"
+                />
               </CardContent>
             </Card>
           </GridItem>
@@ -306,12 +332,13 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
-import { Plus, Lock, Edit, BarChart3, Heading, Minus, Trash2, Star, RefreshCw } from 'lucide-vue-next'
+import { Plus, Lock, Edit, BarChart3, Heading, Minus, Trash2, Star, RefreshCw, PanelRightOpen } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import ChartWidget from '@/components/reports/ChartWidget.vue'
 import HeadingWidget from '@/components/reports/HeadingWidget.vue'
 import DividerWidget from '@/components/reports/DividerWidget.vue'
 import StatsWidget from '@/components/reports/StatsWidget.vue'
+import FilterWidget from '@/components/reports/FilterWidget.vue'
 import DateRangePicker from '@/components/reports/DateRangePicker.vue'
 import FloatingToolbar from '@/components/reports/FloatingToolbar.vue'
 import TableWidget from '@/components/reports/TableWidget.vue'
@@ -605,21 +632,23 @@ const addWidget = (type, chartType = null) => {
     paragraph: 6,
     list: 4,
     code: 6,
-    quote: 6
+    quote: 6,
+    filter: 4
   }
   
   const heightMap = {
     chart: 4,
     stats: 3,
     table: 6,
-    heading: 2,
+    heading: 1,
     divider: 1,
     info: 4,
     performance: 5,
     paragraph: 3,
     list: 4,
     code: 4,
-    quote: 3
+    quote: 3,
+    filter: 3
   }
   
   const newWidget = {
@@ -644,12 +673,68 @@ const removeWidget = (widgetId) => {
   }
 }
 
+const copyWidget = (widget) => {
+  // Create a deep copy of the widget
+  const newWidget = {
+    ...widget,
+    i: `widget-${Date.now()}`,
+    config: { ...widget.config },
+    // Offset position slightly so the copy doesn't overlap exactly
+    x: (widget.x + widget.w) % 12, // Wrap around if exceeds grid width
+    y: widget.y + (widget.x + widget.w >= 12 ? widget.h : 0) // Move down if wrapping
+  }
+  layout.value.push(newWidget)
+  autoSave()
+}
+
 const updateWidgetConfig = (widgetId, newConfig) => {
   const widget = layout.value.find(item => item.i === widgetId)
   if (widget) {
     widget.config = { ...widget.config, ...newConfig }
     autoSave()
   }
+}
+
+// Apply filter from widget to global filters
+const applyFilterFromWidget = (filter) => {
+  // Ensure globalFilters has fieldFilters array
+  if (!globalFilters.value.fieldFilters) {
+    globalFilters.value.fieldFilters = []
+  }
+  
+  // Check if filter already exists
+  const existingIndex = globalFilters.value.fieldFilters.findIndex(
+    f => f.field === filter.field && f.operator === filter.operator && f.value === filter.value
+  )
+  
+  // If not exists, add it
+  if (existingIndex === -1) {
+    globalFilters.value.fieldFilters.push(filter)
+  }
+  
+  // Save and trigger widget refresh
+  autoSave()
+  widgetRefreshKey.value++
+}
+
+// Remove filter from global filters
+const removeFilterFromWidget = (filter) => {
+  if (!globalFilters.value.fieldFilters) {
+    return
+  }
+  
+  // Find and remove the filter
+  const index = globalFilters.value.fieldFilters.findIndex(
+    f => f.field === filter.field && f.operator === filter.operator && f.value === filter.value
+  )
+  
+  if (index !== -1) {
+    globalFilters.value.fieldFilters.splice(index, 1)
+  }
+  
+  // Save and trigger widget refresh
+  autoSave()
+  widgetRefreshKey.value++
 }
 
 const updateWidgetConfigFromToolbar = ({ id, config }) => {
@@ -769,6 +854,15 @@ const getDefaultConfig = (type, chartType = null) => {
     return {
       quote: 'Enter your quote here...',
       author: ''
+    }
+  } else if (type === 'filter') {
+    const filterWidgets = layout.value.filter(w => w.type === 'filter')
+    return {
+      label: `Quick Filter ${filterWidgets.length + 1}`,
+      field: 'computed_month',
+      operator: 'equals',
+      value: '',
+      applied: false
     }
   }
   return {}

@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col">
+  <div class="h-full flex flex-col py-1">
     <!-- Edit Mode Controls -->
-    <div v-if="isEditMode" class="flex items-center justify-between mb-2 flex-shrink-0">
+    <div v-if="isEditMode" class="flex items-center justify-between mb-1 flex-shrink-0">
       <div class="flex items-center space-x-2">
         <Label class="text-sm">Heading Level:</Label>
         <Select v-model="localConfig.level" @update:modelValue="saveConfig">

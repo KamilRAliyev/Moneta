@@ -522,3 +522,154 @@ class EqualsCommand(BaseCommand):
         
         # Default comparison
         return left == right
+
+
+class DateMonthCommand(BaseCommand):
+    """Command to extract month name from a date"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="date_month",
+            description="Extract month name from a date string or datetime object",
+            category="date",
+            parameters=[
+                CommandParameter(
+                    name="date_value",
+                    data_type=DataType.ANY,
+                    description="Date string or datetime object",
+                    required=True
+                ),
+                CommandParameter(
+                    name="format",
+                    data_type=DataType.STRING,
+                    description="Format: 'full' for January, 'short' for Jan, 'number' for 01 (default: 'full')",
+                    required=False,
+                    default_value="full"
+                )
+            ],
+            return_type=DataType.STRING,
+            examples=[
+                "date_month('2024-01-15')",
+                "date_month('2024-01-15', 'short')",
+                "date_month('2024-01-15', 'number')"
+            ]
+        )
+    
+    def _execute_impl(self, date_value: Union[str, datetime], format: str = "full") -> Optional[str]:
+        """Extract month from date"""
+        if date_value is None:
+            return None
+        
+        # Convert string to datetime if needed
+        if isinstance(date_value, str):
+            date_cmd = DateInferCommand()
+            result = date_cmd.execute(date_value)
+            if not result.success or result.value is None:
+                return None
+            date_value = result.value
+        
+        if not isinstance(date_value, datetime):
+            return None
+        
+        # Return month in requested format
+        if format == "short":
+            return date_value.strftime("%b")
+        elif format == "number":
+            return date_value.strftime("%m")
+        else:
+            return date_value.strftime("%B")
+
+
+class DateWeekCommand(BaseCommand):
+    """Command to extract week number from a date"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="date_week",
+            description="Extract ISO week number from a date string or datetime object",
+            category="date",
+            parameters=[
+                CommandParameter(
+                    name="date_value",
+                    data_type=DataType.ANY,
+                    description="Date string or datetime object",
+                    required=True
+                )
+            ],
+            return_type=DataType.STRING,
+            examples=[
+                "date_week('2024-01-15')",
+                "date_week('2024-06-20')"
+            ]
+        )
+    
+    def _execute_impl(self, date_value: Union[str, datetime]) -> Optional[str]:
+        """Extract week number from date"""
+        if date_value is None:
+            return None
+        
+        # Convert string to datetime if needed
+        if isinstance(date_value, str):
+            date_cmd = DateInferCommand()
+            result = date_cmd.execute(date_value)
+            if not result.success or result.value is None:
+                return None
+            date_value = result.value
+        
+        if not isinstance(date_value, datetime):
+            return None
+        
+        year, week, _ = date_value.isocalendar()
+        return f"{year}-W{week:02d}"
+
+
+class DateWeekdayCommand(BaseCommand):
+    """Command to extract weekday name from a date"""
+    
+    def _get_metadata(self) -> CommandMetadata:
+        return CommandMetadata(
+            name="date_weekday",
+            description="Extract weekday name from a date string or datetime object",
+            category="date",
+            parameters=[
+                CommandParameter(
+                    name="date_value",
+                    data_type=DataType.ANY,
+                    description="Date string or datetime object",
+                    required=True
+                ),
+                CommandParameter(
+                    name="format",
+                    data_type=DataType.STRING,
+                    description="Format: 'full' for Monday, 'short' for Mon (default: 'full')",
+                    required=False,
+                    default_value="full"
+                )
+            ],
+            return_type=DataType.STRING,
+            examples=[
+                "date_weekday('2024-01-15')",
+                "date_weekday('2024-01-15', 'short')"
+            ]
+        )
+    
+    def _execute_impl(self, date_value: Union[str, datetime], format: str = "full") -> Optional[str]:
+        """Extract weekday from date"""
+        if date_value is None:
+            return None
+        
+        # Convert string to datetime if needed
+        if isinstance(date_value, str):
+            date_cmd = DateInferCommand()
+            result = date_cmd.execute(date_value)
+            if not result.success or result.value is None:
+                return None
+            date_value = result.value
+        
+        if not isinstance(date_value, datetime):
+            return None
+        
+        if format == "short":
+            return date_value.strftime("%a")
+        else:
+            return date_value.strftime("%A")

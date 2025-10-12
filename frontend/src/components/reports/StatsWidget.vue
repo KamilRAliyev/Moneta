@@ -16,6 +16,14 @@
           <Settings class="w-4 h-4" />
         </Button>
         <Button
+          @click="$emit('copy')"
+          variant="ghost"
+          size="sm"
+          title="Copy widget"
+        >
+          <Copy class="w-4 h-4" />
+        </Button>
+        <Button
           @click="$emit('remove')"
           variant="ghost"
           size="sm"
@@ -31,11 +39,24 @@
     <div class="flex-1 flex items-center justify-center">
       <div v-if="loading" class="text-muted-foreground text-sm">Loading...</div>
       <div v-else-if="error" class="text-destructive text-sm">{{ error }}</div>
-      <div v-else :class="['text-center p-6 rounded-lg', themeClass]">
-        <div class="text-sm font-medium text-muted-foreground mb-2">
-          {{ localConfig.label || 'Metric' }}
+      <div v-else :class="['text-center p-2 rounded-lg', themeClass]">
+        <div class="flex items-center justify-center gap-2 mb-1">
+          <div class="text-sm font-medium text-muted-foreground">
+            {{ localConfig.title || 'Metric' }}
+          </div>
+          <div v-if="hasLocalFilters" class="relative group">
+            <Filter class="w-4 h-4 text-muted-foreground cursor-help" />
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 w-48">
+              <div class="bg-popover text-popover-foreground border rounded-md shadow-md p-2 text-xs space-y-1">
+                <div class="font-semibold">Widget Filters:</div>
+                <div v-for="filter in localConfig.localFilters?.fieldFilters" :key="filter.id" class="text-left">
+                  {{ filter.field }} {{ filter.operator }} {{ filter.value }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="text-5xl font-bold mb-2" :class="valueClass">
+        <div class="text-2xl sm:text-4xl lg:text-5xl font-bold mb-1 break-words" :class="valueClass">
           {{ formatValue(statValue) }}
         </div>
         <div v-if="trend" class="flex items-center justify-center text-sm font-medium" :class="trendClass">
@@ -49,7 +70,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { X, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-vue-next'
+import { X, Settings, TrendingUp, TrendingDown, Minus, Filter, Copy } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/utils/currency'
@@ -77,7 +98,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['config-updated', 'remove', 'configure'])
+const emit = defineEmits(['config-updated', 'remove', 'configure', 'copy'])
 
 // Computed
 const availableFields = computed(() => {
@@ -87,14 +108,20 @@ const availableFields = computed(() => {
   }
 })
 
+const hasLocalFilters = computed(() => {
+  return localConfig.localFilters?.fieldFilters?.some(f => f.field && f.value)
+})
+
 const localConfig = reactive({ 
-  label: props.config.label || 'Total',
+  title: props.config.title || 'Total',
   y_field: props.config.y_field || 'amount',
   aggregation: props.config.aggregation || 'sum',
   colorTheme: props.config.colorTheme || 'default',
   currency_mode: props.config.currency_mode || 'none',
   currency_field: props.config.currency_field || null,
-  currency_code: props.config.currency_code || null
+  currency_code: props.config.currency_code || null,
+  localFilters: props.config.localFilters || { fieldFilters: [] },
+  filter_combine_mode: props.config.filter_combine_mode || 'AND'
 })
 
 console.log('📊 StatsWidget initialized with config:', localConfig)
@@ -181,10 +208,14 @@ const fetchData = async () => {
     loading.value = true
     error.value = null
     
+    // For average, we need to calculate it differently
+    // We'll use 'sum' to get total and 'count' to get the number of records
+    const isAverage = localConfig.aggregation === 'avg'
+    
     const params = {
       x_field: 'category', // Group by category for aggregation
       y_field: localConfig.y_field,
-      aggregation: localConfig.aggregation
+      aggregation: isAverage ? 'sum' : localConfig.aggregation // Use sum for avg calculation
     }
     
     if (props.dateRange.from) {
@@ -203,9 +234,18 @@ const fetchData = async () => {
       params.split_by_currency = false // Stats widget shows total, not split
     }
     
-    // Add global field filters if provided
-    if (props.globalFilters && props.globalFilters.fieldFilters && props.globalFilters.fieldFilters.length > 0) {
-      props.globalFilters.fieldFilters.forEach((filter, index) => {
+    // Combine global and local filters
+    const allFilters = []
+    if (props.globalFilters?.fieldFilters) {
+      allFilters.push(...props.globalFilters.fieldFilters)
+    }
+    if (localConfig.localFilters?.fieldFilters && localConfig.localFilters.fieldFilters.length > 0) {
+      allFilters.push(...localConfig.localFilters.fieldFilters)
+    }
+    
+    // Add combined filters to params
+    if (allFilters.length > 0) {
+      allFilters.forEach((filter, index) => {
         if (filter.field && filter.value) {
           params[`filter_${index}_field`] = filter.field
           params[`filter_${index}_operator`] = filter.operator || 'equals'
@@ -213,19 +253,40 @@ const fetchData = async () => {
           params[`filter_${index}_connector`] = filter.connector || 'AND'
         }
       })
+      
+      // Add global-local combination mode if local filters exist
+      if (localConfig.localFilters?.fieldFilters?.length > 0) {
+        params.global_local_connector = localConfig.filter_combine_mode || 'AND'
+        params.global_filter_count = props.globalFilters?.fieldFilters?.length || 0
+      }
     }
     
-    const response = await reportsApi.getAggregatedData(params)
-    
-    // Calculate total from all categories
-    if (response.data.values && response.data.values.length > 0) {
-      if (localConfig.aggregation === 'avg') {
-        statValue.value = response.data.values.reduce((a, b) => a + b, 0) / response.data.values.length
-      } else {
-        statValue.value = response.data.values.reduce((a, b) => a + b, 0)
+    if (isAverage) {
+      // For average, calculate total sum and divide by number of days
+      const sumResponse = await reportsApi.getAggregatedData(params)
+      const totalSum = sumResponse.data.values && sumResponse.data.values.length > 0
+        ? sumResponse.data.values.reduce((a, b) => a + b, 0)
+        : 0
+      
+      // Calculate number of days in the date range
+      let dayCount = 1
+      if (props.dateRange?.from && props.dateRange?.to) {
+        const fromDate = new Date(props.dateRange.from)
+        const toDate = new Date(props.dateRange.to)
+        const diffTime = Math.abs(toDate - fromDate)
+        dayCount = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1 // +1 to include both start and end dates
       }
+      
+      statValue.value = dayCount > 0 ? totalSum / dayCount : 0
     } else {
-      statValue.value = 0
+      const response = await reportsApi.getAggregatedData(params)
+      
+      // Calculate total from all categories
+      if (response.data.values && response.data.values.length > 0) {
+        statValue.value = response.data.values.reduce((a, b) => a + b, 0)
+      } else {
+        statValue.value = 0
+      }
     }
     
     // TODO: Calculate trend from previous period

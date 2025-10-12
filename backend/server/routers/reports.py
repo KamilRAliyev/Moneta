@@ -259,6 +259,8 @@ async def get_aggregated_data(
     date_field: str = Query("date", description="Field name to use for date filtering"),
     currency_field: Optional[str] = Query(None, description="Currency field name for grouping"),
     split_by_currency: bool = Query(False, description="Split data into separate series by currency"),
+    global_local_connector: str = Query("AND", description="How to combine global and local filters: AND or OR"),
+    global_filter_count: int = Query(0, description="Number of global filters (rest are local)"),
     db: Session = Depends(lambda: get_db("main"))
 ):
     """
@@ -366,76 +368,123 @@ async def get_aggregated_data(
             
             # Apply field filters
             if filter_params:
-                skip_transaction = False
+                # Helper function to evaluate a single filter
+                def evaluate_filter(filter_data, content):
+                    if 'field' not in filter_data or 'operator' not in filter_data or 'value' not in filter_data:
+                        return True  # Skip invalid filters
+                    
+                    field = filter_data['field']
+                    operator = filter_data['operator']
+                    filter_value = filter_data['value']
+                    
+                    if not field or not filter_value:
+                        return True
+                    
+                    # Get field value from content
+                    field_value = content.get(field)
+                    if field_value is None:
+                        # Try case-insensitive search
+                        for key, val in content.items():
+                            if key.lower() == field.lower():
+                                field_value = val
+                                break
+                    
+                    # Field not found
+                    if field_value is None:
+                        return False
+                    
+                    # Convert to string for comparison
+                    field_value_str = str(field_value)
+                    filter_value_str = str(filter_value)
+                    
+                    # Try numeric comparison
+                    try:
+                        field_value_num = float(field_value)
+                        filter_value_num = float(filter_value)
+                        is_numeric = True
+                    except (ValueError, TypeError):
+                        is_numeric = False
+                    
+                    # Apply operator
+                    match = False
+                    if operator == 'equals':
+                        if is_numeric:
+                            match = field_value_num == filter_value_num
+                        else:
+                            match = field_value_str.lower() == filter_value_str.lower()
+                    elif operator == 'contains':
+                        match = filter_value_str.lower() in field_value_str.lower()
+                    elif operator == 'startswith':
+                        match = field_value_str.lower().startswith(filter_value_str.lower())
+                    elif operator == 'endswith':
+                        match = field_value_str.lower().endswith(filter_value_str.lower())
+                    elif operator == 'not_equals':
+                        if is_numeric:
+                            match = field_value_num != filter_value_num
+                        else:
+                            match = field_value_str.lower() != filter_value_str.lower()
+                    elif operator == 'gt' and is_numeric:
+                        match = field_value_num > filter_value_num
+                    elif operator == 'gte' and is_numeric:
+                        match = field_value_num >= filter_value_num
+                    elif operator == 'lt' and is_numeric:
+                        match = field_value_num < filter_value_num
+                    elif operator == 'lte' and is_numeric:
+                        match = field_value_num <= filter_value_num
+                    
+                    return match
+                
+                # Separate global and local filters
+                global_filters = {}
+                local_filters = {}
+                
                 for filter_index, filter_data in filter_params.items():
-                    if 'field' in filter_data and 'operator' in filter_data and 'value' in filter_data:
-                        field = filter_data['field']
-                        operator = filter_data['operator']
-                        filter_value = filter_data['value']
-                        connector = filter_data.get('connector', 'AND')
-                        
-                        if not field or not filter_value:
-                            continue
-                        
-                        # Get field value from content
-                        field_value = content.get(field)
-                        if field_value is None:
-                            # Try case-insensitive search
-                            for key, val in content.items():
-                                if key.lower() == field.lower():
-                                    field_value = val
-                                    break
-                        
-                        # Skip if field not found
-                        if field_value is None:
-                            skip_transaction = True
+                    try:
+                        idx = int(filter_index)
+                        if idx < global_filter_count:
+                            global_filters[filter_index] = filter_data
+                        else:
+                            local_filters[filter_index] = filter_data
+                    except ValueError:
+                        # If index is not an integer, treat as global
+                        global_filters[filter_index] = filter_data
+                
+                # Evaluate global filters (with AND logic within)
+                global_pass = True
+                if global_filters:
+                    for filter_data in global_filters.values():
+                        if not evaluate_filter(filter_data, content):
+                            global_pass = False
                             break
-                        
-                        # Convert to string for comparison
-                        field_value_str = str(field_value)
-                        filter_value_str = str(filter_value)
-                        
-                        # Try numeric comparison
-                        try:
-                            field_value_num = float(field_value)
-                            filter_value_num = float(filter_value)
-                            is_numeric = True
-                        except (ValueError, TypeError):
-                            is_numeric = False
-                        
-                        # Apply operator
-                        match = False
-                        if operator == 'equals':
-                            if is_numeric:
-                                match = field_value_num == filter_value_num
-                            else:
-                                match = field_value_str.lower() == filter_value_str.lower()
-                        elif operator == 'contains':
-                            match = filter_value_str.lower() in field_value_str.lower()
-                        elif operator == 'startswith':
-                            match = field_value_str.lower().startswith(filter_value_str.lower())
-                        elif operator == 'endswith':
-                            match = field_value_str.lower().endswith(filter_value_str.lower())
-                        elif operator == 'not_equals':
-                            if is_numeric:
-                                match = field_value_num != filter_value_num
-                            else:
-                                match = field_value_str.lower() != filter_value_str.lower()
-                        elif operator == 'gt' and is_numeric:
-                            match = field_value_num > filter_value_num
-                        elif operator == 'gte' and is_numeric:
-                            match = field_value_num >= filter_value_num
-                        elif operator == 'lt' and is_numeric:
-                            match = field_value_num < filter_value_num
-                        elif operator == 'lte' and is_numeric:
-                            match = field_value_num <= filter_value_num
-                        
-                        # For AND logic, if any filter fails, skip the transaction
-                        # For OR logic, this is more complex and needs proper implementation
-                        # For now, implement AND logic (all filters must pass)
-                        if not match:
-                            skip_transaction = True
+                
+                # Evaluate local filters (with AND logic within)
+                local_pass = True
+                if local_filters:
+                    for filter_data in local_filters.values():
+                        if not evaluate_filter(filter_data, content):
+                            local_pass = False
                             break
+                
+                # Combine global and local based on connector
+                skip_transaction = False
+                if global_filters and local_filters:
+                    # Both exist, use connector
+                    if global_local_connector.upper() == 'OR':
+                        # At least one set must pass
+                        if not (global_pass or local_pass):
+                            skip_transaction = True
+                    else:  # AND (default)
+                        # Both must pass
+                        if not (global_pass and local_pass):
+                            skip_transaction = True
+                elif global_filters:
+                    # Only global filters
+                    if not global_pass:
+                        skip_transaction = True
+                elif local_filters:
+                    # Only local filters
+                    if not local_pass:
+                        skip_transaction = True
                 
                 if skip_transaction:
                     continue

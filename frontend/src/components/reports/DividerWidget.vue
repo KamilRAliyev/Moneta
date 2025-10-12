@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col justify-center">
+  <div class="h-full flex flex-col justify-center py-1">
     <!-- Edit Mode Controls -->
-    <div v-if="isEditMode" class="flex items-center justify-between mb-2">
+    <div v-if="isEditMode" class="flex items-center justify-between mb-1">
       <div class="flex items-center space-x-2">
         <Label class="text-sm">Thickness:</Label>
         <Select v-model="localConfig.thickness" @update:modelValue="saveConfig">

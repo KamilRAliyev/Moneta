@@ -15,7 +15,10 @@ from .commands import (
     DivideCommand,
     RegexCommand,
     DefaultIfNoneCommand,
-    EqualsCommand
+    EqualsCommand,
+    DateMonthCommand,
+    DateWeekCommand,
+    DateWeekdayCommand
 )
 
 # Register all available commands
@@ -30,7 +33,10 @@ def _register_commands():
         DivideCommand,
         RegexCommand,
         DefaultIfNoneCommand,
-        EqualsCommand
+        EqualsCommand,
+        DateMonthCommand,
+        DateWeekCommand,
+        DateWeekdayCommand
     ]
     
     for command_class in commands:

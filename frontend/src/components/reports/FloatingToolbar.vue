@@ -224,6 +224,120 @@
               <Label class="text-sm cursor-pointer">Group by currency (split into series)</Label>
             </div>
           </div>
+
+          <!-- Widget Local Filters Section -->
+          <div class="space-y-3 pt-3 border-t">
+            <Label class="text-sm font-semibold">Widget Filters</Label>
+            
+            <!-- Filter Combination Mode -->
+            <div v-if="(localConfig.localFilters?.fieldFilters?.length || 0) > 0">
+              <Label class="block text-sm font-medium mb-1">Combine with Global Filters</Label>
+              <Select v-model="localConfig.filter_combine_mode" @update:modelValue="emitConfigUpdate">
+                <SelectTrigger><SelectValue placeholder="AND" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AND">AND (both must match)</SelectItem>
+                  <SelectItem value="OR">OR (either can match)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <!-- Local Filter List -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <Button 
+                  @click="addLocalFilter" 
+                  variant="outline" 
+                  size="sm"
+                  class="h-6 text-xs w-full"
+                >
+                  + Add Widget Filter
+                </Button>
+              </div>
+              
+              <div v-if="!localConfig.localFilters?.fieldFilters?.length" class="text-xs text-muted-foreground italic py-2 text-center border-2 border-dashed border-muted rounded-md">
+                No widget filters
+              </div>
+              
+              <div v-for="(filter, index) in localConfig.localFilters?.fieldFilters" :key="filter.id" class="space-y-2">
+                <!-- Connector for subsequent filters -->
+                <div v-if="index > 0" class="flex items-center justify-center">
+                  <Select v-model="filter.connector" @update:modelValue="emitConfigUpdate">
+                    <SelectTrigger class="w-20 h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AND">AND</SelectItem>
+                      <SelectItem value="OR">OR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <!-- Filter Row -->
+                <div class="p-2 bg-muted/50 rounded-md border space-y-2">
+                  <!-- Field Selection -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Field</Label>
+                    <Select v-model="filter.field" @update:modelValue="emitConfigUpdate">
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue placeholder="Select field..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div v-if="availableFields.ingested.length > 0">
+                          <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Ingested</div>
+                          <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
+                            {{ field }}
+                          </SelectItem>
+                        </div>
+                        <div v-if="availableFields.computed.length > 0">
+                          <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Computed</div>
+                          <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
+                            {{ field }}
+                          </SelectItem>
+                        </div>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <!-- Operator Selection -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Operator</Label>
+                    <Select v-model="filter.operator" @update:modelValue="emitConfigUpdate">
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="op in operators" :key="op.value" :value="op.value">
+                          {{ op.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <!-- Value Input -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Value</Label>
+                    <Input
+                      v-model="filter.value"
+                      @input="emitConfigUpdate"
+                      placeholder="Enter value"
+                      class="h-8 text-xs"
+                    />
+                  </div>
+                  
+                  <!-- Remove Button -->
+                  <Button 
+                    @click="removeLocalFilter(filter.id)"
+                    variant="outline" 
+                    size="sm" 
+                    class="w-full h-6 text-xs text-destructive hover:text-destructive"
+                  >
+                    <X class="w-3 h-3 mr-1" />
+                    Remove Filter
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Stats Widget Config -->
@@ -317,6 +431,120 @@
               <p class="text-xs text-muted-foreground mt-1">
                 Enter: USD, EUR, GBP, JPY, etc.
               </p>
+            </div>
+          </div>
+
+          <!-- Widget Local Filters Section -->
+          <div class="space-y-3 pt-3 border-t">
+            <Label class="text-sm font-semibold">Widget Filters</Label>
+            
+            <!-- Filter Combination Mode -->
+            <div v-if="(localConfig.localFilters?.fieldFilters?.length || 0) > 0">
+              <Label class="block text-sm font-medium mb-1">Combine with Global Filters</Label>
+              <Select v-model="localConfig.filter_combine_mode" @update:modelValue="emitConfigUpdate">
+                <SelectTrigger><SelectValue placeholder="AND" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AND">AND (both must match)</SelectItem>
+                  <SelectItem value="OR">OR (either can match)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <!-- Local Filter List -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <Button 
+                  @click="addLocalFilter" 
+                  variant="outline" 
+                  size="sm"
+                  class="h-6 text-xs w-full"
+                >
+                  + Add Widget Filter
+                </Button>
+              </div>
+              
+              <div v-if="!localConfig.localFilters?.fieldFilters?.length" class="text-xs text-muted-foreground italic py-2 text-center border-2 border-dashed border-muted rounded-md">
+                No widget filters
+              </div>
+              
+              <div v-for="(filter, index) in localConfig.localFilters?.fieldFilters" :key="filter.id" class="space-y-2">
+                <!-- Connector for subsequent filters -->
+                <div v-if="index > 0" class="flex items-center justify-center">
+                  <Select v-model="filter.connector" @update:modelValue="emitConfigUpdate">
+                    <SelectTrigger class="w-20 h-6 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AND">AND</SelectItem>
+                      <SelectItem value="OR">OR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <!-- Filter Row -->
+                <div class="p-2 bg-muted/50 rounded-md border space-y-2">
+                  <!-- Field Selection -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Field</Label>
+                    <Select v-model="filter.field" @update:modelValue="emitConfigUpdate">
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue placeholder="Select field..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <div v-if="availableFields.ingested.length > 0">
+                          <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Ingested</div>
+                          <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
+                            {{ field }}
+                          </SelectItem>
+                        </div>
+                        <div v-if="availableFields.computed.length > 0">
+                          <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Computed</div>
+                          <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
+                            {{ field }}
+                          </SelectItem>
+                        </div>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <!-- Operator Selection -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Operator</Label>
+                    <Select v-model="filter.operator" @update:modelValue="emitConfigUpdate">
+                      <SelectTrigger class="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="op in operators" :key="op.value" :value="op.value">
+                          {{ op.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <!-- Value Input -->
+                  <div>
+                    <Label class="text-xs text-muted-foreground">Value</Label>
+                    <Input
+                      v-model="filter.value"
+                      @input="emitConfigUpdate"
+                      placeholder="Enter value"
+                      class="h-8 text-xs"
+                    />
+                  </div>
+                  
+                  <!-- Remove Button -->
+                  <Button 
+                    @click="removeLocalFilter(filter.id)"
+                    variant="outline" 
+                    size="sm" 
+                    class="w-full h-6 text-xs text-destructive hover:text-destructive"
+                  >
+                    <X class="w-3 h-3 mr-1" />
+                    Remove Filter
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -604,6 +832,10 @@
                 <Quote class="w-4 h-4 mr-1" />
                 Quote
               </Button>
+              <Button @click="$emit('add-widget', 'filter')" variant="outline" size="sm">
+                <Filter class="w-4 h-4 mr-1" />
+                Filter
+              </Button>
               <Button @click="$emit('add-widget', 'divider')" variant="outline" size="sm">
                 <Minus class="w-4 h-4 mr-1" />
                 Divider
@@ -618,7 +850,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge, Save, Info, Gauge, Type, List, Code, Quote } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge, Save, Info, Gauge, Type, List, Code, Quote, Filter } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -801,6 +1033,18 @@ watch(() => props.globalFilters, (newFilters) => {
   }
 }, { immediate: true, deep: true })
 
+// Initialize localFilters in localConfig if not present
+watch(() => props.selectedWidget, (newWidget) => {
+  if (newWidget && newWidget.config) {
+    if (!localConfig.value.localFilters) {
+      localConfig.value.localFilters = { fieldFilters: [] }
+    }
+    if (!localConfig.value.filter_combine_mode) {
+      localConfig.value.filter_combine_mode = 'AND'
+    }
+  }
+}, { immediate: true })
+
 const toolbarStyle = computed(() => {
   if (props.mode === 'sidebar') {
     return {
@@ -873,6 +1117,28 @@ const emitFilterUpdate = () => {
 const activeFilterCount = computed(() => {
   return localFilters.value.fieldFilters.filter(f => f.field && f.value).length
 })
+
+// Local filter methods
+const addLocalFilter = () => {
+  if (!localConfig.value.localFilters) {
+    localConfig.value.localFilters = { fieldFilters: [] }
+  }
+  localConfig.value.localFilters.fieldFilters.push({
+    field: '',
+    operator: 'equals',
+    value: '',
+    connector: 'AND',
+    id: Date.now()
+  })
+  emitConfigUpdate()
+}
+
+const removeLocalFilter = (filterId) => {
+  if (localConfig.value.localFilters && localConfig.value.localFilters.fieldFilters) {
+    localConfig.value.localFilters.fieldFilters = localConfig.value.localFilters.fieldFilters.filter(f => f.id !== filterId)
+    emitConfigUpdate()
+  }
+}
 
 const startDrag = (e) => {
   // Only drag if clicking on the header area

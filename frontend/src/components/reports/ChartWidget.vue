@@ -5,8 +5,21 @@
     @click="isEditMode ? $emit('configure') : undefined"
   >
     <!-- Widget Header -->
-    <div class="flex items-center justify-between mb-3 flex-shrink-0" @click.stop>
-      <h3 class="text-base font-semibold text-foreground">{{ localConfig.title || 'Chart' }}</h3>
+    <div class="flex items-center justify-between mb-2 flex-shrink-0" @click.stop>
+      <div class="flex items-center gap-2">
+        <h3 class="text-base font-semibold text-foreground">{{ localConfig.title || 'Chart' }}</h3>
+        <div v-if="hasLocalFilters" class="relative group">
+          <Filter class="w-4 h-4 text-muted-foreground cursor-help" />
+          <div class="absolute top-full left-0 mt-2 hidden group-hover:block z-50 w-64">
+            <div class="bg-popover text-popover-foreground border rounded-md shadow-md p-2 text-xs space-y-1">
+              <div class="font-semibold">Widget Filters:</div>
+              <div v-for="filter in localConfig.localFilters?.fieldFilters" :key="filter.id" class="text-left">
+                {{ filter.field }} {{ filter.operator }} {{ filter.value }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="flex items-center space-x-1">
         <Button
           v-if="isEditMode"
@@ -16,6 +29,15 @@
           title="Configure widget"
         >
           <Settings class="w-4 h-4" />
+        </Button>
+        <Button
+          v-if="isEditMode"
+          @click="$emit('copy')"
+          variant="ghost"
+          size="sm"
+          title="Copy widget"
+        >
+          <Copy class="w-4 h-4" />
         </Button>
         <Button
           v-if="isEditMode"
@@ -57,7 +79,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { X, Settings } from 'lucide-vue-next'
+import { X, Settings, Filter, Copy } from 'lucide-vue-next'
 import { reportsApi } from '@/api/reports'
 import BarChart from './BarChart.vue'
 import LineChart from './LineChart.vue'
@@ -95,10 +117,14 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['config-updated', 'remove', 'configure'])
+const emit = defineEmits(['config-updated', 'remove', 'configure', 'copy'])
 
 // Reactive data
-const localConfig = reactive({ ...props.config })
+const localConfig = reactive({ 
+  ...props.config,
+  localFilters: props.config.localFilters || { fieldFilters: [] },
+  filter_combine_mode: props.config.filter_combine_mode || 'AND'
+})
 const chartData = ref({ labels: [], values: [] })
 const loading = ref(false)
 const error = ref(null)
@@ -109,6 +135,10 @@ const availableFields = computed(() => {
     ingested: Object.keys(props.metadata.ingested_columns || {}),
     computed: Object.keys(props.metadata.computed_columns || {})
   }
+})
+
+const hasLocalFilters = computed(() => {
+  return localConfig.localFilters?.fieldFilters?.some(f => f.field && f.value)
 })
 
 const chartComponent = computed(() => {
@@ -185,17 +215,33 @@ const fetchChartData = async () => {
       console.log('  ✅ Split by currency:', params.split_by_currency)
     }
     
-    // Add global field filters if provided
-    if (props.globalFilters && props.globalFilters.fieldFilters && props.globalFilters.fieldFilters.length > 0) {
-      props.globalFilters.fieldFilters.forEach((filter, index) => {
+    // Combine global and local filters
+    const allFilters = []
+    if (props.globalFilters?.fieldFilters) {
+      allFilters.push(...props.globalFilters.fieldFilters)
+    }
+    if (localConfig.localFilters?.fieldFilters && localConfig.localFilters.fieldFilters.length > 0) {
+      allFilters.push(...localConfig.localFilters.fieldFilters)
+    }
+    
+    // Add combined filters to params
+    if (allFilters.length > 0) {
+      allFilters.forEach((filter, index) => {
         if (filter.field && filter.value) {
           params[`filter_${index}_field`] = filter.field
           params[`filter_${index}_operator`] = filter.operator || 'equals'
           params[`filter_${index}_value`] = filter.value
           params[`filter_${index}_connector`] = filter.connector || 'AND'
-          console.log(`  ✅ Added global filter ${index}:`, filter)
+          console.log(`  ✅ Added filter ${index}:`, filter)
         }
       })
+      
+      // Add global-local combination mode if local filters exist
+      if (localConfig.localFilters?.fieldFilters?.length > 0) {
+        params.global_local_connector = localConfig.filter_combine_mode || 'AND'
+        params.global_filter_count = props.globalFilters?.fieldFilters?.length || 0
+        console.log(`  ✅ Filter combination mode: ${params.global_local_connector}`)
+      }
     }
     
     console.log('  - Final params:', params)

@@ -84,43 +84,49 @@ export function formatCurrency(value, currencyCode, options = {}) {
     compact = false
   } = options
 
+  // Check if value is negative (for parentheses formatting)
+  const isNegative = value < 0
+  const absValue = Math.abs(value)
+
   // Determine decimal places
   const decimals = NO_DECIMAL_CURRENCIES.has(code) ? 0 : 2
 
-  // Format the number
+  // Format the absolute value
   let formatted
-  if (compact && Math.abs(value) >= 1000) {
+  if (compact && absValue >= 1000) {
     // Compact notation for large numbers
     formatted = new Intl.NumberFormat(locale, {
       notation: 'compact',
       maximumFractionDigits: 1
-    }).format(value)
+    }).format(absValue)
   } else {
     formatted = new Intl.NumberFormat(locale, {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
-    }).format(value)
+    }).format(absValue)
   }
 
   // Get currency symbol
   const symbol = CURRENCY_SYMBOLS[code] || code
 
   // Build result
+  let result
   if (!showSymbol && !showCode) {
-    return formatted
+    result = formatted
+  } else if (showCode) {
+    result = `${formatted} ${code}`
+  } else {
+    // Symbol placement (most currencies prefix, some suffix)
+    const suffixCurrencies = new Set(['NOK', 'SEK', 'DKK', 'PLN'])
+    if (suffixCurrencies.has(code)) {
+      result = `${formatted} ${symbol}`
+    } else {
+      result = `${symbol}${formatted}`
+    }
   }
 
-  if (showCode) {
-    return `${formatted} ${code}`
-  }
-
-  // Symbol placement (most currencies prefix, some suffix)
-  const suffixCurrencies = new Set(['NOK', 'SEK', 'DKK', 'PLN'])
-  if (suffixCurrencies.has(code)) {
-    return `${formatted} ${symbol}`
-  }
-
-  return `${symbol}${formatted}`
+  // Wrap in parentheses if negative (financial reporting style)
+  return isNegative ? `(${result})` : result
 }
 
 /**
