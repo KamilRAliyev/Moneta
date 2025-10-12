@@ -26,7 +26,14 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, borderColor, createDropShadow } = useChartTheme()
+const { 
+  chartColors, 
+  textColor, 
+  borderColor, 
+  createDropShadow,
+  getChartColors,
+  getConditionalColor
+} = useChartTheme()
 
 let resizeObserver = null
 
@@ -34,6 +41,12 @@ const createChart = () => {
   if (!chartContainer.value || !props.data.labels || props.data.labels.length === 0) {
     return
   }
+
+  // Get colors based on config
+  const colors = getChartColors({
+    colorScheme: props.config.colorScheme || 'revolut',
+    customColors: props.config.customColors
+  })
 
   // Handle standard aggregated data format by creating a single series
   let seriesData = []
@@ -44,7 +57,7 @@ const createChart = () => {
     seriesData = [{
       name: 'Value',
       values: props.data.values,
-      color: chartColors.value[0]
+      color: colors[0]
     }]
   }
   
@@ -100,56 +113,77 @@ const createChart = () => {
     .nice()
     .range([height, 0])
 
-  // Add X axis
-  svg.append('g')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x))
-    .selectAll('text')
-    .attr('transform', 'rotate(-45)')
-    .style('text-anchor', 'end')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
+  // Axis configuration with defaults
+  const axisConfig = props.config.axisConfig || {}
+  const showXAxis = axisConfig.showXAxis !== false
+  const showYAxis = axisConfig.showYAxis !== false
+  const gridStyle = axisConfig.gridStyle || 'dashed'
+  const labelRotation = axisConfig.labelRotation !== undefined ? axisConfig.labelRotation : -45
 
-  // Add Y axis
-  const useCompact = props.config.compactNumbers !== false
-  const yAxisFormat = props.data.currencyCode ? 
-    (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
-    (d) => {
-      if (useCompact && Math.abs(d) >= 1000) {
-        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+  // Animation configuration
+  const enableAnimations = props.config.enableAnimations !== false
+  const animationDuration = props.config.animationSpeed || 800
+
+  // Add grid lines based on style
+  if (gridStyle !== 'none') {
+    const gridOpacity = gridStyle === 'solid' ? 0.2 : 0.1
+    const gridDash = gridStyle === 'dots' ? '1,4' : gridStyle === 'dashed' ? '2,2' : '0'
+    
+    svg.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
+      .style('stroke', borderColor.value || '#cccccc')
+      .style('stroke-opacity', gridOpacity)
+      .style('stroke-dasharray', gridDash)
+      .selectAll('.domain')
+      .remove()
+  }
+
+  // Add X axis if enabled
+  if (showXAxis) {
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x))
+      .selectAll('text')
+      .attr('transform', `rotate(${labelRotation})`)
+      .style('text-anchor', labelRotation < 0 ? 'end' : 'start')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
+
+  // Add Y axis if enabled
+  if (showYAxis) {
+    const useCompact = props.config.compactNumbers !== false
+    const yAxisFormat = props.data.currencyCode ? 
+      (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
+      (d) => {
+        if (useCompact && Math.abs(d) >= 1000) {
+          return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+        }
+        return d.toLocaleString()
       }
-      return d.toLocaleString()
-    }
 
-  svg.append('g')
-    .call(d3.axisLeft(y).tickFormat(yAxisFormat))
-    .selectAll('text')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
+    svg.append('g')
+      .call(d3.axisLeft(y).tickFormat(yAxisFormat))
+      .selectAll('text')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
 
   // Style axis lines
   svg.selectAll('.domain')
     .style('stroke', borderColor.value || '#cccccc')
+    .style('opacity', showXAxis || showYAxis ? 1 : 0)
 
   svg.selectAll('.tick line')
     .style('stroke', borderColor.value || '#cccccc')
     .style('opacity', 0.2)
     .style('stroke-dasharray', '2,2')
 
-  // Add grid lines
-  svg.append('g')
-    .attr('class', 'grid')
-    .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
-    .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-opacity', 0.1)
-    .style('stroke-dasharray', '2,2')
-    .selectAll('.domain')
-    .remove()
-
   // Create gradients for each series
   const defs = svg.append('defs')
   seriesData.forEach((series, i) => {
-    const color = series.color || chartColors.value[i % chartColors.value.length]
+    const color = series.color || colors[i % colors.length]
     const gradient = defs.append('linearGradient')
       .attr('id', `stacked-gradient-${i}`)
       .attr('x1', '0%')
@@ -221,7 +255,7 @@ const createChart = () => {
         totalValue.toLocaleString()
 
       // Create tooltip
-      const seriesColor = seriesData[seriesIndex].color || chartColors.value[seriesIndex % chartColors.value.length]
+      const seriesColor = seriesData[seriesIndex].color || colors[seriesIndex % colors.length]
       const tooltip = d3.select(chartContainer.value)
         .append('div')
         .attr('class', 'chart-tooltip')
@@ -266,7 +300,7 @@ const createChart = () => {
         .attr('transform', `translate(0, ${i * 25})`)
         .style('cursor', 'pointer')
 
-      const color = series.color || chartColors.value[i % chartColors.value.length]
+      const color = series.color || colors[i % colors.length]
 
       legendItem.append('rect')
         .attr('x', 0)
@@ -311,6 +345,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

@@ -33,7 +33,7 @@
           {{ copied ? 'Copied!' : 'Copy' }}
         </Button>
         <Button
-          @click="$emit('remove')"
+          @click.stop="$emit('remove')"
           variant="ghost"
           size="sm"
           class="text-destructive hover:text-destructive h-6 w-6 p-0"

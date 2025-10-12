@@ -147,6 +147,43 @@ const createChart = () => {
     .ease(d3.easeQuadOut)
     .attr('stroke-width', d => Math.max(1, d.width))
 
+  // Add value labels on links (if enabled)
+  const showLinkLabels = props.config.showLinkLabels !== false // Default to true
+  if (showLinkLabels) {
+    const linkLabels = svg.append('g')
+      .attr('class', 'link-labels')
+      .selectAll('text')
+      .data(graph.links.filter(d => d.width > 15)) // Only show labels on wider links
+      .enter()
+      .append('text')
+      .attr('x', d => (d.source.x1 + d.target.x0) / 2)
+      .attr('y', d => (d.y0 + d.y1) / 2)
+      .attr('dy', '0.35em')
+      .attr('text-anchor', 'middle')
+      .style('font-size', d => Math.min(12, Math.max(9, d.width / 5)) + 'px') // Responsive font size
+      .style('font-weight', '600')
+      .style('fill', 'white')
+      .style('text-shadow', '0 1px 3px rgba(0,0,0,0.8)')
+      .style('pointer-events', 'none')
+      .style('opacity', 0)
+      .text(d => {
+        const value = d.originalValue !== undefined ? d.originalValue : d.value
+        if (props.data.currencyCode) {
+          return formatCurrency(value, props.data.currencyCode, { compact: true })
+        }
+        if (Math.abs(value) >= 1000) {
+          return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+        }
+        return value.toLocaleString()
+      })
+
+    // Animate label appearance
+    linkLabels.transition()
+      .delay(1200)
+      .duration(600)
+      .style('opacity', 0.9)
+  }
+
   // Add nodes
   const nodeRects = svg.append('g')
     .attr('class', 'nodes')
@@ -345,6 +382,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

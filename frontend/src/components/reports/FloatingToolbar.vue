@@ -225,6 +225,128 @@
             </div>
           </div>
 
+          <!-- Chart Styling & Behavior -->
+          <div class="space-y-3 pt-3 border-t">
+            <Label class="text-sm font-semibold">Chart Styling & Behavior</Label>
+            
+            <!-- Tabbed Interface for Chart Controls -->
+            <div class="space-y-2">
+              <div class="flex gap-1 border-b border-border">
+                <button
+                  @click="activeChartTab = 'colors'"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="activeChartTab === 'colors' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                >
+                  Colors
+                </button>
+                <button
+                  @click="activeChartTab = 'sorting'"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="activeChartTab === 'sorting' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                >
+                  Sorting
+                </button>
+                <button
+                  @click="activeChartTab = 'axis'"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="activeChartTab === 'axis' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                >
+                  Axis
+                </button>
+                <button
+                  @click="activeChartTab = 'advanced'"
+                  class="px-3 py-1.5 text-xs font-medium transition-colors"
+                  :class="activeChartTab === 'advanced' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                >
+                  Advanced
+                </button>
+              </div>
+              
+              <!-- Tab Content -->
+              <div class="pt-2">
+                <!-- Colors Tab -->
+                <div v-if="activeChartTab === 'colors'">
+                  <ChartColorControls 
+                    :config="localConfig" 
+                    :showHeatmapOptions="localConfig.chartType === 'heatmap'"
+                    @update="emitConfigUpdate"
+                    ref="colorControlsRef"
+                  />
+                </div>
+                
+                <!-- Sorting Tab -->
+                <div v-if="activeChartTab === 'sorting'">
+                  <ChartSortingControls 
+                    :config="localConfig"
+                    @update="emitConfigUpdate"
+                    ref="sortingControlsRef"
+                  />
+                </div>
+                
+                <!-- Axis Tab -->
+                <div v-if="activeChartTab === 'axis'">
+                  <ChartAxisControls 
+                    :config="localConfig"
+                    @update="emitConfigUpdate"
+                    ref="axisControlsRef"
+                  />
+                </div>
+                
+                <!-- Advanced Tab -->
+                <div v-if="activeChartTab === 'advanced'">
+                  <div class="space-y-3">
+                    <!-- Zoom & Pan -->
+                    <div class="flex items-center justify-between">
+                      <Label class="text-xs font-medium text-muted-foreground">Enable Zoom & Pan</Label>
+                      <Checkbox 
+                        :checked="localConfig.enableZoom === true" 
+                        @update:checked="(val) => { localConfig.enableZoom = val; emitConfigUpdate() }"
+                      />
+                    </div>
+                    
+                    <!-- Animations -->
+                    <div class="flex items-center justify-between">
+                      <Label class="text-xs font-medium text-muted-foreground">Enable Animations</Label>
+                      <Checkbox 
+                        :checked="localConfig.enableAnimations !== false" 
+                        @update:checked="(val) => { localConfig.enableAnimations = val; emitConfigUpdate() }"
+                      />
+                    </div>
+                    
+                    <!-- Animation Speed -->
+                    <div v-if="localConfig.enableAnimations !== false">
+                      <Label class="text-xs font-medium text-muted-foreground mb-1 block">Animation Speed (ms)</Label>
+                      <Input 
+                        type="number"
+                        v-model.number="localConfig.animationSpeed" 
+                        placeholder="800"
+                        @input="emitConfigUpdate"
+                      />
+                    </div>
+                    
+                    <!-- Sankey Link Labels -->
+                    <div v-if="localConfig.chartType === 'sankey'" class="flex items-center justify-between">
+                      <Label class="text-xs font-medium text-muted-foreground">Show Link Labels</Label>
+                      <Checkbox 
+                        :checked="localConfig.showLinkLabels !== false" 
+                        @update:checked="(val) => { localConfig.showLinkLabels = val; emitConfigUpdate() }"
+                      />
+                    </div>
+                    
+                    <!-- Temporal Pattern for Heatmap -->
+                    <div v-if="localConfig.chartType === 'heatmap'" class="flex items-center justify-between">
+                      <Label class="text-xs font-medium text-muted-foreground">Enable Temporal Pattern</Label>
+                      <Checkbox 
+                        :checked="localConfig.enableTemporalPattern === true" 
+                        @update:checked="(val) => { localConfig.enableTemporalPattern = val; emitConfigUpdate() }"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Widget Local Filters Section -->
           <div class="space-y-3 pt-3 border-t">
             <Label class="text-sm font-semibold">Widget Filters</Label>
@@ -857,6 +979,9 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import ChartSortingControls from './ChartSortingControls.vue'
+import ChartColorControls from './ChartColorControls.vue'
+import ChartAxisControls from './ChartAxisControls.vue'
 
 const props = defineProps({
   isEditMode: {
@@ -912,6 +1037,10 @@ const toolbarRef = ref(null)
 const isCollapsed = ref(false)
 const isDragging = ref(false)
 const position = ref({ x: 20, y: 100 }) // Default position
+const activeChartTab = ref('colors') // Active tab for chart controls
+const colorControlsRef = ref(null)
+const sortingControlsRef = ref(null)
+const axisControlsRef = ref(null)
 const dragOffset = ref({ x: 0, y: 0 })
 const localConfig = ref({})
 const localFilters = ref({ fieldFilters: [] })
@@ -1077,10 +1206,40 @@ const getWidgetIcon = (type) => {
 
 const emitConfigUpdate = () => {
   if (props.selectedWidget) {
+    console.log('🔄 FloatingToolbar: emitConfigUpdate called')
+    console.log('  - selectedWidget.id:', props.selectedWidget.id)
+    console.log('  - localConfig:', localConfig.value)
+    
+    // Start with current local config
+    const mergedConfig = { ...localConfig.value }
+    
+    // Merge sorting controls if they exist
+    if (sortingControlsRef.value?.config) {
+      console.log('  - Merging sortingControls:', sortingControlsRef.value.config)
+      Object.assign(mergedConfig, sortingControlsRef.value.config)
+    }
+    
+    // Merge color controls if they exist
+    if (colorControlsRef.value?.config) {
+      console.log('  - Merging colorControls:', colorControlsRef.value.config)
+      Object.assign(mergedConfig, colorControlsRef.value.config)
+    }
+    
+    // Merge axis controls (has special structure)
+    if (axisControlsRef.value?.getConfig) {
+      const axisConfig = axisControlsRef.value.getConfig()
+      console.log('  - Merging axisControls:', axisConfig)
+      Object.assign(mergedConfig, axisConfig)
+    }
+    
+    console.log('  ✅ Final mergedConfig:', mergedConfig)
+    
     emit('update-widget-config', {
       id: props.selectedWidget.id,
-      config: { ...localConfig.value }
+      config: mergedConfig
     })
+  } else {
+    console.warn('⚠️ emitConfigUpdate called but no selectedWidget')
   }
 }
 

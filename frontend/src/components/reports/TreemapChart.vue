@@ -6,6 +6,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { useChartSorting } from '@/composables/useChartSorting'
 import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
@@ -21,7 +22,14 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, createDropShadow } = useChartTheme()
+const { 
+  chartColors, 
+  textColor, 
+  createDropShadow, 
+  getConditionalColor,
+  getChartColors 
+} = useChartTheme()
+const { sortData, applyStatisticalFilters } = useChartSorting()
 
 let resizeObserver = null
 
@@ -38,19 +46,51 @@ const createChart = () => {
 
   if (width <= 0 || height <= 0) return
 
+  // Apply sorting and filtering
+  let chartLabels = [...props.data.labels]
+  let chartValues = [...props.data.values]
+  
+  // Apply statistical filters first
+  if (props.config.hideZeros || props.config.hideNegatives || props.config.hideOutliers || props.config.valueRange) {
+    const filtered = applyStatisticalFilters(chartLabels, chartValues, {
+      hideOutliers: props.config.hideOutliers,
+      outlierThreshold: props.config.outlierThreshold || 2,
+      valueRange: props.config.valueRange
+    })
+    chartLabels = filtered.labels
+    chartValues = filtered.values
+  }
+  
+  // Apply sorting
+  const sorted = sortData(chartLabels, chartValues, {
+    sortMode: props.config.sortMode || 'value',
+    sortDirection: props.config.sortDirection || 'desc',
+    topN: props.config.topN,
+    hideZeros: props.config.hideZeros,
+    hideNegatives: props.config.hideNegatives
+  })
+  chartLabels = sorted.labels
+  chartValues = sorted.values
+
+  // Get colors based on config
+  const colors = getChartColors({
+    colorScheme: props.config.colorScheme || 'revolut',
+    customColors: props.config.customColors
+  })
+
   // Prepare hierarchical data - filter out very small items (< 0.5% of total)
-  const totalValue = d3.sum(props.data.values, d => Math.abs(d))
+  const totalValue = d3.sum(chartValues, d => Math.abs(d))
   const threshold = totalValue * 0.005 // 0.5% threshold
   
-  const children = props.data.labels
+  const children = chartLabels
     .map((label, i) => ({
       name: label,
-      value: Math.abs(props.data.values[i]),
-      originalValue: props.data.values[i], // Keep original signed value
-      isNegative: props.data.values[i] < 0
+      value: Math.abs(chartValues[i]),
+      originalValue: chartValues[i], // Keep original signed value
+      isNegative: chartValues[i] < 0,
+      colorIndex: i
     }))
     .filter(item => item.value >= threshold) // Filter out very small items
-    .sort((a, b) => b.value - a.value)
   
   const hierarchyData = {
     name: 'root',
@@ -83,14 +123,20 @@ const createChart = () => {
   // Create drop shadow
   createDropShadow(svg, 'treemap-shadow')
 
-  // Financial color coding: red for negative (expenses), green for positive (income)
-  const negativeColor = '#EF4444' // Red for expenses/negative
-  const positiveColor = '#10B981' // Green for income/positive
-
-  // Create gradients for each tile based on sign
+  // Create gradients for each tile
   root.leaves().forEach((d, i) => {
-    const isNegative = d.data.isNegative
-    const baseColor = isNegative ? negativeColor : positiveColor
+    let baseColor
+    
+    // Use getConditionalColor to determine color based on original signed value
+    const conditionalColor = getConditionalColor(d.data.originalValue, props.config)
+    
+    if (conditionalColor) {
+      // Use conditional coloring from getConditionalColor()
+      baseColor = conditionalColor
+    } else {
+      // Use color palette
+      baseColor = colors[d.data.colorIndex % colors.length]
+    }
     
     const gradient = defs.append('linearGradient')
       .attr('id', `treemap-gradient-${i}`)
@@ -391,6 +437,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

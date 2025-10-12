@@ -6,6 +6,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { useChartSorting } from '@/composables/useChartSorting'
 import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
@@ -21,7 +22,15 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, borderColor, createGlowFilter } = useChartTheme()
+const { 
+  chartColors, 
+  textColor, 
+  borderColor, 
+  createGlowFilter,
+  getChartColors,
+  getConditionalColor
+} = useChartTheme()
+const { sortData, applyStatisticalFilters } = useChartSorting()
 
 let resizeObserver = null
 
@@ -39,6 +48,49 @@ const createChart = () => {
 
   if (width <= 0 || height <= 0) return
 
+  // Apply sorting and filtering
+  let chartLabels = [...props.data.labels]
+  let chartValues = [...props.data.values]
+
+  // Apply statistical filters if enabled
+  if (props.config.hideZeros || props.config.hideNegatives || props.config.hideOutliers) {
+    const filtered = applyStatisticalFilters(chartLabels, chartValues, {
+      hideOutliers: props.config.hideOutliers,
+      outlierThreshold: props.config.outlierThreshold || 2
+    })
+    chartLabels = filtered.labels
+    chartValues = filtered.values
+  }
+
+  // Apply sorting
+  const sorted = sortData(chartLabels, chartValues, {
+    sortMode: props.config.sortMode || 'none',
+    sortDirection: props.config.sortDirection || 'desc',
+    topN: props.config.topN,
+    hideZeros: props.config.hideZeros,
+    hideNegatives: props.config.hideNegatives
+  })
+  chartLabels = sorted.labels
+  chartValues = sorted.values
+
+  // Get colors based on config
+  const colors = getChartColors({
+    colorScheme: props.config.colorScheme || 'revolut',
+    customColors: props.config.customColors
+  })
+
+  // Determine color - apply conditional coloring if enabled
+  let areaColor = colors[0] || '#0075FF'
+  
+  if (props.config.useConditionalColors) {
+    // Calculate average value to determine predominant sign
+    const avgValue = d3.mean(chartValues)
+    const conditionalColor = getConditionalColor(avgValue, props.config)
+    if (conditionalColor) {
+      areaColor = conditionalColor
+    }
+  }
+
   // Create SVG
   const svg = d3.select(chartContainer.value)
     .append('svg')
@@ -48,9 +100,9 @@ const createChart = () => {
     .attr('transform', `translate(${margin.left},${margin.top})`)
 
   // Prepare data points
-  const data = props.data.labels.map((label, i) => ({
+  const data = chartLabels.map((label, i) => ({
     label,
-    value: props.data.values[i]
+    value: chartValues[i]
   }))
 
   // Create scales
@@ -78,60 +130,81 @@ const createChart = () => {
 
   gradient.append('stop')
     .attr('offset', '0%')
-    .attr('stop-color', chartColors.value[0] || '#0075FF')
+    .attr('stop-color', areaColor)
     .attr('stop-opacity', 0.5)
 
   gradient.append('stop')
     .attr('offset', '100%')
-    .attr('stop-color', chartColors.value[0] || '#0075FF')
+    .attr('stop-color', areaColor)
     .attr('stop-opacity', 0)
 
   // Create glow filter for the line
   createGlowFilter(svg, 'area-line-glow')
 
-  // Add subtle grid lines (Revolut style)
-  svg.append('g')
-    .attr('class', 'grid')
-    .attr('opacity', 0.1)
-    .call(d3.axisLeft(y)
-      .tickSize(-width)
-      .tickFormat('')
-    )
-    .selectAll('line')
-    .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-dasharray', '2,2')
+  // Axis configuration with defaults
+  const axisConfig = props.config.axisConfig || {}
+  const showXAxis = axisConfig.showXAxis !== false
+  const showYAxis = axisConfig.showYAxis !== false
+  const gridStyle = axisConfig.gridStyle || 'dashed'
+  const labelRotation = axisConfig.labelRotation !== undefined ? axisConfig.labelRotation : -45
+  const showZeroLine = axisConfig.showZeroLine !== false
 
-  // X axis with subtle tick lines
-  svg.append('g')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x).tickSize(0))
-    .selectAll('text')
-    .attr('transform', 'rotate(-45)')
-    .style('text-anchor', 'end')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '12px')
-    .style('font-weight', '500')
+  // Animation configuration
+  const enableAnimations = props.config.enableAnimations !== false
+  const animationDuration = props.config.animationSpeed || 800
 
-  // Y axis with currency formatting if applicable
-  const useCompact = props.config.compactNumbers !== false
-  const yAxisFormat = props.data.currencyCode ? 
-    (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
-    (d) => {
-      if (useCompact && Math.abs(d) >= 1000) {
-        return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+  // Add grid lines based on style
+  if (gridStyle !== 'none') {
+    const gridOpacity = gridStyle === 'solid' ? 0.2 : 0.1
+    const gridDash = gridStyle === 'dots' ? '1,4' : gridStyle === 'dashed' ? '2,2' : '0'
+    
+    svg.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
+      .style('stroke', borderColor.value || '#cccccc')
+      .style('stroke-opacity', gridOpacity)
+      .style('stroke-dasharray', gridDash)
+      .selectAll('.domain')
+      .remove()
+  }
+
+  // Add X axis if enabled
+  if (showXAxis) {
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickSize(0))
+      .selectAll('text')
+      .attr('transform', `rotate(${labelRotation})`)
+      .style('text-anchor', labelRotation < 0 ? 'end' : 'start')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+  }
+
+  // Add Y axis with currency formatting if enabled
+  if (showYAxis) {
+    const useCompact = props.config.compactNumbers !== false
+    const yAxisFormat = props.data.currencyCode ? 
+      (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
+      (d) => {
+        if (useCompact && Math.abs(d) >= 1000) {
+          return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(d)
+        }
+        return d.toLocaleString()
       }
-      return d.toLocaleString()
-    }
 
-  svg.append('g')
-    .call(d3.axisLeft(y).tickSize(0).tickFormat(yAxisFormat))
-    .selectAll('text')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '12px')
-    .style('font-weight', '500')
+    svg.append('g')
+      .call(d3.axisLeft(y).tickSize(0).tickFormat(yAxisFormat))
+      .selectAll('text')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+  }
 
-  // Remove domain lines for clean Revolut look
-  svg.selectAll('.domain').remove()
+  // Style axis lines based on visibility
+  svg.selectAll('.domain')
+    .style('stroke', borderColor.value || '#cccccc')
+    .style('opacity', showXAxis || showYAxis ? 1 : 0)
 
   // Get the zero line position
   const zeroY = y(0)
@@ -165,34 +238,41 @@ const createChart = () => {
     .datum(data)
     .attr('fill', 'url(#area-gradient)')
     .attr('d', area)
-    .attr('opacity', 0)
 
-  // Animate area with fade-in
-  areaPath.transition()
-    .duration(1000)
-    .ease(d3.easeQuadOut)
-    .attr('opacity', 1)
+  // Animate area with fade-in if animations enabled
+  if (enableAnimations) {
+    areaPath
+      .attr('opacity', 0)
+      .transition()
+      .duration(animationDuration)
+      .ease(d3.easeQuadOut)
+      .attr('opacity', 1)
+  } else {
+    areaPath.attr('opacity', 1)
+  }
 
   // Add line path with glow effect (thicker, Revolut style)
   const linePath = svg.append('path')
     .datum(data)
     .attr('fill', 'none')
-    .attr('stroke', chartColors.value[0] || '#0075FF')
+    .attr('stroke', areaColor)
     .attr('stroke-width', 3)
     .attr('stroke-linecap', 'round')
     .attr('stroke-linejoin', 'round')
     .attr('filter', 'url(#area-line-glow)')
     .attr('d', line)
 
-  // Animate the line with drawing effect
-  const totalLength = linePath.node().getTotalLength()
-  linePath
-    .attr('stroke-dasharray', totalLength + ' ' + totalLength)
-    .attr('stroke-dashoffset', totalLength)
-    .transition()
-    .duration(1200)
-    .ease(d3.easeQuadOut)
-    .attr('stroke-dashoffset', 0)
+  // Animate the line with drawing effect if animations enabled
+  if (enableAnimations) {
+    const totalLength = linePath.node().getTotalLength()
+    linePath
+      .attr('stroke-dasharray', totalLength + ' ' + totalLength)
+      .attr('stroke-dashoffset', totalLength)
+      .transition()
+      .duration(animationDuration * 1.2)
+      .ease(d3.easeQuadOut)
+      .attr('stroke-dashoffset', 0)
+  }
 
   // Add dots with enhanced glow effect
   const dots = svg.selectAll('.dot')
@@ -202,18 +282,20 @@ const createChart = () => {
     .attr('class', 'dot')
     .attr('cx', d => x(d.label))
     .attr('cy', d => y(d.value))
-    .attr('r', 0)
-    .attr('fill', chartColors.value[0] || '#0075FF')
+    .attr('r', enableAnimations ? 0 : 5)
+    .attr('fill', areaColor)
     .attr('stroke', 'white')
     .attr('stroke-width', 2)
     .style('filter', 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))')
     .style('cursor', 'pointer')
 
-  // Animate dots with stagger
-  dots.transition()
-    .delay((d, i) => 1000 + i * 40)
-    .duration(300)
-    .attr('r', 5)
+  // Animate dots with stagger if animations enabled
+  if (enableAnimations) {
+    dots.transition()
+      .delay((d, i) => animationDuration + i * 40)
+      .duration(300)
+      .attr('r', 5)
+  }
 
   // Add interactive tooltips with crosshair
   const focus = svg.append('g')
@@ -306,6 +388,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

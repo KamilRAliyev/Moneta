@@ -6,6 +6,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useChartTheme } from '@/composables/useChartTheme'
+import { useChartSorting } from '@/composables/useChartSorting'
 import { formatCurrency } from '@/utils/currency'
 
 const props = defineProps({
@@ -21,7 +22,14 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, createDropShadow } = useChartTheme()
+const { 
+  chartColors, 
+  textColor, 
+  createDropShadow,
+  getChartColors,
+  getConditionalColor
+} = useChartTheme()
+const { sortData, applyStatisticalFilters } = useChartSorting()
 
 let resizeObserver = null
 
@@ -38,6 +46,38 @@ const createChart = () => {
   
   if (containerWidth <= 0 || containerHeight <= 0) return
 
+  // Apply sorting and filtering
+  let chartLabels = [...props.data.labels]
+  let chartValues = [...props.data.values]
+  
+  // Apply statistical filters first
+  if (props.config.hideZeros || props.config.hideNegatives || props.config.hideOutliers || props.config.valueRange) {
+    const filtered = applyStatisticalFilters(chartLabels, chartValues, {
+      hideOutliers: props.config.hideOutliers,
+      outlierThreshold: props.config.outlierThreshold || 2,
+      valueRange: props.config.valueRange
+    })
+    chartLabels = filtered.labels
+    chartValues = filtered.values
+  }
+  
+  // Apply sorting
+  const sorted = sortData(chartLabels, chartValues, {
+    sortMode: props.config.sortMode || 'value',
+    sortDirection: props.config.sortDirection || 'desc',
+    topN: props.config.topN,
+    hideZeros: props.config.hideZeros,
+    hideNegatives: props.config.hideNegatives
+  })
+  chartLabels = sorted.labels
+  chartValues = sorted.values
+
+  // Get colors based on config
+  const colors = getChartColors({
+    colorScheme: props.config.colorScheme || 'revolut',
+    customColors: props.config.customColors
+  })
+
   // Use more space - leave room for legend on the right
   const legendWidth = 200
   const chartWidth = containerWidth - legendWidth - 40 // Padding
@@ -53,22 +93,31 @@ const createChart = () => {
     .attr('transform', `translate(${size / 2 + 20},${containerHeight / 2})`)
 
   // Prepare data
-  const data = props.data.labels.map((label, i) => ({
+  const data = chartLabels.map((label, i) => ({
     label,
-    value: props.data.values[i]
+    value: chartValues[i],
+    colorIndex: i
   }))
 
   // Create color scale
   const color = d3.scaleOrdinal()
-    .domain(props.data.labels)
-    .range(chartColors.value)
+    .domain(chartLabels)
+    .range(colors)
 
   // Create defs for gradients and filters
   const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs')
   
   // Create radial gradients for each segment
-  props.data.labels.forEach((label, i) => {
-    const segmentColor = chartColors.value[i % chartColors.value.length]
+  data.forEach((d, i) => {
+    // Determine color: conditional or from palette
+    let segmentColor
+    if (props.config.useConditionalColors) {
+      const conditionalColor = getConditionalColor(d.value, props.config)
+      segmentColor = conditionalColor || colors[i % colors.length]
+    } else {
+      segmentColor = colors[i % colors.length]
+    }
+    
     const gradient = defs.append('radialGradient')
       .attr('id', `donut-gradient-${i}`)
     

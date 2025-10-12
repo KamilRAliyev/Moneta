@@ -26,7 +26,7 @@
         </Button>
         <Button
           v-if="isEditMode"
-          @click="$emit('remove')"
+          @click.stop="$emit('remove')"
           variant="ghost"
           size="sm"
           class="text-destructive hover:text-destructive h-7 w-7 p-0"

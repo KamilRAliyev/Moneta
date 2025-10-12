@@ -16,7 +16,7 @@
         </Select>
       </div>
       <Button
-        @click="$emit('remove')"
+        @click.stop="$emit('remove')"
         variant="ghost"
         size="sm"
         class="text-destructive hover:text-destructive"

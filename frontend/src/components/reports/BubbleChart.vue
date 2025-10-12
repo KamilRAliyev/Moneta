@@ -25,11 +25,26 @@ const props = defineProps({
 })
 
 const chartContainer = ref(null)
-const { chartColors, textColor, borderColor, createGlowFilter, createDropShadow } = useChartTheme()
+const { 
+  chartColors, 
+  textColor, 
+  borderColor, 
+  createGlowFilter, 
+  createDropShadow,
+  getChartColors,
+  getConditionalColor
+} = useChartTheme()
 
 let resizeObserver = null
 
 const createChart = () => {
+  // Get colors based on config
+  const colors = getChartColors({
+    colorScheme: props.config.colorScheme || 'revolut',
+    customColors: props.config.customColors
+  })
+  
+
   // Handle standard aggregated data format by converting to bubble format
   let dataPoints = []
   
@@ -91,9 +106,19 @@ const createChart = () => {
   const categories = [...new Set(dataPoints.map(d => d.category || 'default'))]
   const colorScale = d3.scaleOrdinal()
     .domain(categories)
-    .range(chartColors.value)
+    .range(colors)
 
-  // Add X axis
+  // Axis configuration with defaults
+  const axisConfig = props.config.axisConfig || {}
+  const showXAxis = axisConfig.showXAxis !== false
+  const showYAxis = axisConfig.showYAxis !== false
+  const gridStyle = axisConfig.gridStyle || 'dashed'
+
+  // Animation configuration
+  const enableAnimations = props.config.enableAnimations !== false
+  const animationDuration = props.config.animationSpeed || 800
+
+  // Axis formatting
   const useCompact = props.config.compactNumbers !== false
   const xAxisFormat = (d) => {
     if (useCompact && Math.abs(d) >= 1000) {
@@ -101,59 +126,64 @@ const createChart = () => {
     }
     return d.toLocaleString()
   }
-
-  svg.append('g')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x).tickFormat(xAxisFormat))
-    .selectAll('text')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
-
-  // Add Y axis
   const yAxisFormat = props.data.currencyCode ? 
     (d) => formatCurrency(d, props.data.currencyCode, { compact: useCompact }) :
     xAxisFormat
 
-  svg.append('g')
-    .call(d3.axisLeft(y).tickFormat(yAxisFormat))
-    .selectAll('text')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
+  // Add grid lines based on style
+  if (gridStyle !== 'none') {
+    const gridOpacity = gridStyle === 'solid' ? 0.2 : 0.1
+    const gridDash = gridStyle === 'dots' ? '1,4' : gridStyle === 'dashed' ? '2,2' : '0'
+    
+    // Vertical grid lines (Y axis)
+    svg.append('g')
+      .attr('class', 'grid')
+      .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
+      .style('stroke', borderColor.value || '#cccccc')
+      .style('stroke-opacity', gridOpacity)
+      .style('stroke-dasharray', gridDash)
+      .selectAll('.domain')
+      .remove()
+    
+    // Horizontal grid lines (X axis)
+    svg.append('g')
+      .attr('class', 'grid')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickSize(-height).tickFormat(''))
+      .style('stroke', borderColor.value || '#cccccc')
+      .style('stroke-opacity', gridOpacity)
+      .style('stroke-dasharray', gridDash)
+      .selectAll('.domain')
+      .remove()
+  }
+
+  // Add X axis if enabled
+  if (showXAxis) {
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickFormat(xAxisFormat))
+      .selectAll('text')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
+
+  // Add Y axis if enabled
+  if (showYAxis) {
+    svg.append('g')
+      .call(d3.axisLeft(y).tickFormat(yAxisFormat))
+      .selectAll('text')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
 
   // Style axis lines
   svg.selectAll('.domain')
     .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-width', 1.5)
+    .style('opacity', showXAxis || showYAxis ? 1 : 0)
 
   svg.selectAll('.tick line')
     .style('stroke', borderColor.value || '#cccccc')
     .style('opacity', 0.2)
-
-  // Add grid lines
-  svg.append('g')
-    .attr('class', 'grid')
-    .attr('opacity', 0.1)
-    .call(d3.axisLeft(y)
-      .tickSize(-width)
-      .tickFormat('')
-    )
-    .selectAll('line')
-    .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-dasharray', '2,2')
-
-  svg.append('g')
-    .attr('class', 'grid')
-    .attr('opacity', 0.1)
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x)
-      .tickSize(-height)
-      .tickFormat('')
-    )
-    .selectAll('line')
-    .style('stroke', borderColor.value || '#cccccc')
-    .style('stroke-dasharray', '2,2')
-
-  svg.selectAll('.grid .domain').remove()
 
   // Create filters
   createGlowFilter(svg, 'bubble-glow')
@@ -316,6 +346,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

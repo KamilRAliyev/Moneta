@@ -7,10 +7,10 @@
         <span class="text-xs font-medium">Filter Control</span>
       </div>
       <div class="flex items-center space-x-1">
-        <Button @click="$emit('copy')" variant="ghost" size="sm" class="h-6 w-6 p-0" title="Copy widget">
+        <Button @click.stop="$emit('copy')" variant="ghost" size="sm" class="h-6 w-6 p-0" title="Copy widget">
           <Copy class="w-4 h-4" />
         </Button>
-        <Button @click="$emit('remove')" variant="ghost" size="sm" class="h-6 w-6 p-0">
+        <Button @click.stop="$emit('remove')" variant="ghost" size="sm" class="h-6 w-6 p-0">
           <X class="w-4 h-4" />
         </Button>
       </div>

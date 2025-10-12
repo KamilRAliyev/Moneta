@@ -37,16 +37,61 @@ const createChart = () => {
   let yLabels = []
   let values2D = []
   
-  if (props.data.xLabels && props.data.yLabels) {
-    // Use provided heatmap format
+  // Check for 3D heatmap data (e.g., weekday × date × amount)
+  if (props.data.xLabels && props.data.yLabels && props.data.values) {
+    // Use provided heatmap format (supports both 2D and 3D)
     xLabels = props.data.xLabels
     yLabels = props.data.yLabels
     values2D = props.data.values || []
+    
+    // For 3D data, values might be an object with aggregation info
+    if (props.data.aggregationMode && typeof values2D === 'object' && !Array.isArray(values2D)) {
+      // Convert aggregated 3D data to 2D matrix
+      const matrix = []
+      for (let y = 0; y < yLabels.length; y++) {
+        const row = []
+        for (let x = 0; x < xLabels.length; x++) {
+          const key = `${yLabels[y]}_${xLabels[x]}`
+          row.push(values2D[key] || 0)
+        }
+        matrix.push(row)
+      }
+      values2D = matrix
+    }
   } else if (props.data.labels && props.data.values) {
     // Convert standard format to a simple 1xN heatmap
     xLabels = props.data.labels
     yLabels = ['Value']
     values2D = [props.data.values]
+  }
+  
+  // Apply special handling for temporal patterns (weekday analysis)
+  if (props.config.enableTemporalPattern && xLabels.length > 0) {
+    // Check if we have date-like labels that can be converted to weekdays
+    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    
+    // Try to detect if yLabels are weekdays
+    const hasWeekdays = yLabels.some(label => weekdayNames.includes(label))
+    
+    if (hasWeekdays) {
+      // Reorder to start from Monday
+      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      const reorderedY = []
+      const reorderedValues = []
+      
+      dayOrder.forEach(day => {
+        const index = yLabels.indexOf(day)
+        if (index >= 0) {
+          reorderedY.push(day)
+          reorderedValues.push(values2D[index])
+        }
+      })
+      
+      if (reorderedY.length > 0) {
+        yLabels = reorderedY
+        values2D = reorderedValues
+      }
+    }
   }
   
   if (!chartContainer.value || xLabels.length === 0 || yLabels.length === 0) {
@@ -94,33 +139,86 @@ const createChart = () => {
     })
   })
 
-  // Color scale - cool to warm gradient
+  // Color scale - configurable with multiple schemes
   const allValues = flatData.map(d => d.value)
   const [minValue, maxValue] = d3.extent(allValues)
   
+  // Choose color scheme based on config
+  const colorScheme = props.config.heatmapColorScheme || 'blue-red'
+  let colorInterpolator
+  
+  switch (colorScheme) {
+    case 'blue-red':
+      colorInterpolator = d3.interpolateRgb('#4F46E5', '#EF4444') // Blue to Red
+      break
+    case 'green-red':
+      colorInterpolator = d3.interpolateRgb('#10B981', '#EF4444') // Green to Red (financial)
+      break
+    case 'blues':
+      colorInterpolator = d3.interpolateBlues
+      break
+    case 'greens':
+      colorInterpolator = d3.interpolateGreens
+      break
+    case 'reds':
+      colorInterpolator = d3.interpolateReds
+      break
+    case 'purples':
+      colorInterpolator = d3.interpolatePurples
+      break
+    case 'viridis':
+      colorInterpolator = d3.interpolateViridis
+      break
+    case 'plasma':
+      colorInterpolator = d3.interpolatePlasma
+      break
+    case 'diverging':
+      // Diverging scale for data with meaningful zero point
+      colorInterpolator = d3.interpolateRdYlGn
+      break
+    default:
+      colorInterpolator = d3.interpolateRgb('#4F46E5', '#EF4444')
+  }
+  
   const colorScale = d3.scaleSequential()
     .domain([minValue, maxValue])
-    .interpolator(d3.interpolateRgb('#4F46E5', '#EF4444')) // Blue to Red
+    .interpolator(colorInterpolator)
 
-  // Add X axis
-  svg.append('g')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x).tickSize(0))
-    .selectAll('text')
-    .attr('transform', 'rotate(-45)')
-    .style('text-anchor', 'end')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
+  // Axis configuration with defaults
+  const axisConfig = props.config.axisConfig || {}
+  const showXAxis = axisConfig.showXAxis !== false
+  const showYAxis = axisConfig.showYAxis !== false
+  const labelRotation = axisConfig.labelRotation !== undefined ? axisConfig.labelRotation : -45
 
-  // Add Y axis
-  svg.append('g')
-    .call(d3.axisLeft(y).tickSize(0))
-    .selectAll('text')
-    .style('fill', textColor.value || '#000000')
-    .style('font-size', '11px')
+  // Animation configuration
+  const enableAnimations = props.config.enableAnimations !== false
+  const animationDuration = props.config.animationSpeed || 800
 
-  // Remove axis lines
-  svg.selectAll('.domain').remove()
+  // Add X axis if enabled
+  if (showXAxis) {
+    svg.append('g')
+      .attr('transform', `translate(0,${height})`)
+      .call(d3.axisBottom(x).tickSize(0))
+      .selectAll('text')
+      .attr('transform', `rotate(${labelRotation})`)
+      .style('text-anchor', labelRotation < 0 ? 'end' : 'start')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
+
+  // Add Y axis if enabled
+  if (showYAxis) {
+    svg.append('g')
+      .call(d3.axisLeft(y).tickSize(0))
+      .selectAll('text')
+      .style('fill', textColor.value || '#000000')
+      .style('font-size', '11px')
+  }
+
+  // Style axis lines
+  svg.selectAll('.domain')
+    .style('stroke', borderColor.value || '#cccccc')
+    .style('opacity', showXAxis || showYAxis ? 1 : 0)
 
   // Add cells
   const cells = svg.selectAll('.cell')
@@ -134,19 +232,21 @@ const createChart = () => {
     .attr('height', y.bandwidth())
     .attr('rx', 4)
     .attr('ry', 4)
-    .attr('fill', '#f0f0f0')
+    .attr('fill', enableAnimations ? '#f0f0f0' : d => colorScale(d.value))
     .attr('stroke', borderColor.value || '#fff')
     .attr('stroke-width', 2)
     .style('cursor', 'pointer')
 
-  // Animate cells with color
-  cells.transition()
-    .duration(800)
-    .delay((d, i) => i * 10)
-    .ease(d3.easeQuadOut)
-    .attr('fill', d => colorScale(d.value))
+  // Animate cells with color if animations enabled
+  if (enableAnimations) {
+    cells.transition()
+      .duration(animationDuration)
+      .delay((d, i) => i * 10)
+      .ease(d3.easeQuadOut)
+      .attr('fill', d => colorScale(d.value))
+  }
 
-  // Add tooltips
+  // Add tooltips with enhanced information
   cells.on('mouseover', function(event, d) {
     d3.select(this)
       .transition()
@@ -158,6 +258,15 @@ const createChart = () => {
     const formattedValue = props.data.currencyCode ?
       formatCurrency(d.value, props.data.currencyCode, { compact: false }) :
       d.value.toLocaleString()
+    
+    // Calculate percentile for context
+    const sortedValues = allValues.filter(v => v > 0).sort((a, b) => a - b)
+    const percentile = sortedValues.length > 0 
+      ? Math.round((sortedValues.filter(v => v <= d.value).length / sortedValues.length) * 100)
+      : 0
+
+    // Get color intensity
+    const intensity = ((d.value - minValue) / (maxValue - minValue) * 100).toFixed(0)
 
     const tooltip = d3.select(chartContainer.value)
       .append('div')
@@ -166,17 +275,20 @@ const createChart = () => {
       .style('background', 'rgba(0, 0, 0, 0.9)')
       .style('backdrop-filter', 'blur(10px)')
       .style('color', 'white')
-      .style('padding', '12px 16px')
+      .style('padding', '14px 18px')
       .style('border-radius', '12px')
       .style('font-size', '13px')
       .style('font-weight', '500')
       .style('pointer-events', 'none')
       .style('z-index', '1000')
-      .style('box-shadow', '0 8px 16px rgba(0,0,0,0.3)')
+      .style('box-shadow', '0 10px 20px rgba(0,0,0,0.4)')
       .style('border', '1px solid rgba(255,255,255,0.1)')
       .html(`
-        <div style="font-weight: 600; margin-bottom: 6px;">${d.x} × ${d.y}</div>
-        <div style="font-size: 16px; font-weight: 700;">${formattedValue}</div>
+        <div style="font-weight: 700; margin-bottom: 8px; font-size: 14px;">${d.x} × ${d.y}</div>
+        <div style="font-size: 18px; font-weight: 700; margin-bottom: 6px; color: ${colorScale(d.value)};">${formattedValue}</div>
+        <div style="font-size: 11px; opacity: 0.7; margin-top: 6px;">
+          ${percentile}th percentile • ${intensity}% intensity
+        </div>
       `)
       .style('left', `${event.pageX - chartContainer.value.getBoundingClientRect().left + 10}px`)
       .style('top', `${event.pageY - chartContainer.value.getBoundingClientRect().top - 10}px`)
@@ -279,6 +391,13 @@ onUnmounted(() => {
 })
 
 watch(() => props.data, () => {
+  nextTick(() => {
+    createChart()
+  })
+}, { deep: true })
+
+// Watch for config changes and re-render
+watch(() => props.config, () => {
   nextTick(() => {
     createChart()
   })

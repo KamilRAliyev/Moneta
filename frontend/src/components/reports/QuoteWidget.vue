@@ -16,7 +16,7 @@
         <Edit class="w-4 h-4" />
       </Button>
       <Button
-        @click="$emit('remove')"
+        @click.stop="$emit('remove')"
         variant="ghost"
         size="sm"
         class="text-destructive hover:text-destructive h-6 w-6 p-0 ml-1"

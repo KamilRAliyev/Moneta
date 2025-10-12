@@ -88,6 +88,36 @@ export function useChartTheme() {
   ]
 
   /**
+   * Financial color palette - optimized for financial data
+   */
+  const financialColors = {
+    positive: '#10B981', // Green for income/gains
+    negative: '#EF4444', // Red for expenses/losses
+    neutral: '#6B7280',  // Gray for neutral
+    zero: '#9CA3AF'      // Light gray for zero
+  }
+
+  /**
+   * Sequential color palettes for heatmaps and gradients
+   */
+  const sequentialPalettes = {
+    blues: ['#EFF6FF', '#DBEAFE', '#BFDBFE', '#93C5FD', '#60A5FA', '#3B82F6', '#2563EB', '#1D4ED8', '#1E40AF'],
+    greens: ['#F0FDF4', '#DCFCE7', '#BBF7D0', '#86EFAC', '#4ADE80', '#22C55E', '#16A34A', '#15803D', '#166534'],
+    reds: ['#FEF2F2', '#FEE2E2', '#FECACA', '#FCA5A5', '#F87171', '#EF4444', '#DC2626', '#B91C1C', '#991B1B'],
+    purples: ['#FAF5FF', '#F3E8FF', '#E9D5FF', '#D8B4FE', '#C084FC', '#A855F7', '#9333EA', '#7E22CE', '#6B21A8'],
+    warm: ['#FEF3C7', '#FDE68A', '#FCD34D', '#FBBF24', '#F59E0B', '#D97706', '#B45309', '#92400E', '#78350F']
+  }
+
+  /**
+   * Diverging color palette - for data with meaningful center point
+   */
+  const divergingPalette = [
+    '#B91C1C', '#DC2626', '#EF4444', '#F87171', // Reds (negative)
+    '#E5E7EB', // Gray (center/zero)
+    '#34D399', '#10B981', '#059669', '#047857'  // Greens (positive)
+  ]
+
+  /**
    * Get chart color palette - prefers Revolut colors, falls back to theme
    */
   const chartColors = computed(() => {
@@ -258,6 +288,99 @@ export function useChartTheme() {
     return `url(#${id})`
   }
 
+  /**
+   * Get color based on conditional rules
+   * @param {number} value - The value to evaluate
+   * @param {Object} config - Conditional color configuration
+   * @returns {string} - Color hex code
+   */
+  const getConditionalColor = (value, config = {}) => {
+    const {
+      useConditionalColors = false,
+      positiveColor = financialColors.positive,
+      negativeColor = financialColors.negative,
+      zeroColor = financialColors.zero,
+      thresholds = [] // Array of { value, color, operator }
+    } = config
+
+    if (!useConditionalColors) {
+      return null
+    }
+
+    // Check custom thresholds first
+    if (thresholds && thresholds.length > 0) {
+      for (const threshold of thresholds) {
+        const { value: thresholdValue, color, operator = '>=' } = threshold
+        let matches = false
+        
+        switch (operator) {
+          case '>=': matches = value >= thresholdValue; break
+          case '>': matches = value > thresholdValue; break
+          case '<=': matches = value <= thresholdValue; break
+          case '<': matches = value < thresholdValue; break
+          case '==': matches = value === thresholdValue; break
+          default: matches = false
+        }
+        
+        if (matches) return color
+      }
+    }
+
+    // Default financial coloring
+    if (value > 0) return positiveColor
+    if (value < 0) return negativeColor
+    return zeroColor
+  }
+
+  /**
+   * Get color palette by name
+   * @param {string} paletteName - Name of the palette
+   * @returns {Array} - Array of color strings
+   */
+  const getPalette = (paletteName = 'revolut') => {
+    switch (paletteName) {
+      case 'revolut':
+        return revolutColors
+      case 'financial':
+        return [financialColors.positive, financialColors.negative, financialColors.neutral]
+      case 'sequential-blues':
+        return sequentialPalettes.blues
+      case 'sequential-greens':
+        return sequentialPalettes.greens
+      case 'sequential-reds':
+        return sequentialPalettes.reds
+      case 'sequential-purples':
+        return sequentialPalettes.purples
+      case 'sequential-warm':
+        return sequentialPalettes.warm
+      case 'diverging':
+        return divergingPalette
+      default:
+        return revolutColors
+    }
+  }
+
+  /**
+   * Get colors for chart based on configuration
+   * @param {Object} config - Color configuration object
+   * @returns {Array} - Array of colors to use
+   */
+  const getChartColors = (config = {}) => {
+    const {
+      colorScheme = 'revolut',
+      customColors = null,
+      useGlobalColors = true
+    } = config
+
+    // Custom colors take precedence
+    if (customColors && Array.isArray(customColors) && customColors.length > 0) {
+      return customColors
+    }
+
+    // Use specified palette
+    return getPalette(colorScheme)
+  }
+
   return {
     chartColors,
     getChartColor,
@@ -266,9 +389,15 @@ export function useChartTheme() {
     borderColor,
     backgroundColor,
     revolutColors,
+    financialColors,
+    sequentialPalettes,
+    divergingPalette,
     createGradient,
     createGlowFilter,
-    createDropShadow
+    createDropShadow,
+    getConditionalColor,
+    getPalette,
+    getChartColors
   }
 }
 

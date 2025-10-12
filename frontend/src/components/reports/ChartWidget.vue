@@ -23,7 +23,7 @@
       <div class="flex items-center space-x-1">
         <Button
           v-if="isEditMode"
-          @click="$emit('configure')"
+          @click.stop="$emit('configure')"
           variant="ghost"
           size="sm"
           title="Configure widget"
@@ -32,7 +32,7 @@
         </Button>
         <Button
           v-if="isEditMode"
-          @click="$emit('copy')"
+          @click.stop="$emit('copy')"
           variant="ghost"
           size="sm"
           title="Copy widget"
@@ -41,7 +41,7 @@
         </Button>
         <Button
           v-if="isEditMode"
-          @click="$emit('remove')"
+          @click.stop="$emit('remove')"
           variant="ghost"
           size="sm"
           class="text-destructive hover:text-destructive"

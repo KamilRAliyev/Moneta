@@ -5,7 +5,7 @@
       <h3 class="text-sm font-medium text-muted-foreground">Table Widget</h3>
       <div class="flex items-center space-x-1">
         <Button
-          @click="toggleConfig"
+          @click.stop="toggleConfig"
           variant="ghost"
           size="sm"
           title="Configure widget"
@@ -13,7 +13,7 @@
           <Settings class="w-4 h-4" />
         </Button>
         <Button
-          @click="$emit('remove')"
+          @click.stop="$emit('remove')"
           variant="ghost"
           size="sm"
           class="text-destructive hover:text-destructive"
