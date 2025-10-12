@@ -85,6 +85,10 @@ const props = defineProps({
     type: Object,
     default: () => ({ from: null, to: null })
   },
+  globalFilters: {
+    type: Object,
+    default: () => ({ fieldFilters: [] })
+  },
   metadata: {
     type: Object,
     default: () => ({ ingested_columns: {}, computed_columns: {} })
@@ -181,6 +185,19 @@ const fetchChartData = async () => {
       console.log('  ✅ Split by currency:', params.split_by_currency)
     }
     
+    // Add global field filters if provided
+    if (props.globalFilters && props.globalFilters.fieldFilters && props.globalFilters.fieldFilters.length > 0) {
+      props.globalFilters.fieldFilters.forEach((filter, index) => {
+        if (filter.field && filter.value) {
+          params[`filter_${index}_field`] = filter.field
+          params[`filter_${index}_operator`] = filter.operator || 'equals'
+          params[`filter_${index}_value`] = filter.value
+          params[`filter_${index}_connector`] = filter.connector || 'AND'
+          console.log(`  ✅ Added global filter ${index}:`, filter)
+        }
+      })
+    }
+    
     console.log('  - Final params:', params)
     
     const response = await reportsApi.getAggregatedData(params)
@@ -249,6 +266,17 @@ watch(() => [props.dateRange?.from, props.dateRange?.to, props.dateRange?.dateFi
     console.log('  New:', { from: newFrom, to: newTo, dateField: newDateField })
     fetchChartData()
   }
+)
+
+// Watch for global filter changes
+watch(() => props.globalFilters, 
+  (newFilters, oldFilters) => {
+    console.log('ChartWidget: Global filters changed!')
+    console.log('  Old:', oldFilters)
+    console.log('  New:', newFilters)
+    fetchChartData()
+  },
+  { deep: true }
 )
 
 // Lifecycle

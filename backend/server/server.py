@@ -28,9 +28,11 @@ def create_app() -> FastAPI:
 
     return app
 
+# Create app instance for uvicorn
+app = create_app()
+
 def main():
     import uvicorn
-    app = create_app()
     uvicorn.run(app, host="localhost", port=8000)
 
 if __name__ == "__main__":

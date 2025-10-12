@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useSettingsStore } from '@/stores/settings.js'
+import { useReportMetrics } from '@/composables/useReportMetrics'
 
 // Create axios instance
 const api = axios.create({
@@ -15,6 +16,12 @@ api.interceptors.request.use(
     // Get the current backend URL from settings store
     const settingsStore = useSettingsStore()
     config.baseURL = settingsStore.backendUrl
+    
+    // Track API call for reports
+    if (config.url?.includes('/reports')) {
+      const { incrementApiCall } = useReportMetrics()
+      incrementApiCall()
+    }
     
     console.log(`Making request to: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
     return config

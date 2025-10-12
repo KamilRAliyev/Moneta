@@ -353,6 +353,121 @@
           Save & Lock
         </Button>
 
+        <!-- Global Filters Section -->
+        <div class="space-y-2 pt-3 border-t">
+          <div class="flex items-center justify-between">
+            <Label class="text-xs text-muted-foreground">Global Filters</Label>
+            <div class="flex items-center gap-2">
+              <Badge v-if="activeFilterCount > 0" variant="secondary" class="text-xs">
+                {{ activeFilterCount }} active
+              </Badge>
+              <Button 
+                v-if="localFilters.fieldFilters.length > 0"
+                @click="clearAllFilters" 
+                variant="ghost" 
+                size="sm"
+                class="h-6 text-xs"
+              >
+                <X class="w-3 h-3 mr-1" />
+                Clear
+              </Button>
+              <Button 
+                @click="addGlobalFilter" 
+                variant="outline" 
+                size="sm"
+                class="h-6 text-xs"
+              >
+                + Add Filter
+              </Button>
+            </div>
+          </div>
+          
+          <!-- Filter List -->
+          <div v-if="localFilters.fieldFilters.length === 0" class="text-xs text-muted-foreground italic py-3 text-center border-2 border-dashed border-muted rounded-md">
+            No filters applied
+          </div>
+          
+          <div v-for="(filter, index) in localFilters.fieldFilters" :key="filter.id" class="space-y-2">
+            <!-- Connector for subsequent filters -->
+            <div v-if="index > 0" class="flex items-center justify-center">
+              <Select v-model="filter.connector" @update:modelValue="emitFilterUpdate">
+                <SelectTrigger class="w-20 h-6 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="conn in connectors" :key="conn.value" :value="conn.value">
+                    {{ conn.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <!-- Filter Row -->
+            <div class="p-2 bg-muted/50 rounded-md border space-y-2">
+              <!-- Field Selection -->
+              <div>
+                <Label class="text-xs text-muted-foreground">Field</Label>
+                <Select v-model="filter.field" @update:modelValue="emitFilterUpdate">
+                  <SelectTrigger class="h-8 text-xs">
+                    <SelectValue placeholder="Select field..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div v-if="availableFields.ingested.length > 0">
+                      <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Ingested</div>
+                      <SelectItem v-for="field in availableFields.ingested" :key="field" :value="field">
+                        {{ field }}
+                      </SelectItem>
+                    </div>
+                    <div v-if="availableFields.computed.length > 0">
+                      <div class="px-2 py-1 text-xs font-semibold text-muted-foreground">Computed</div>
+                      <SelectItem v-for="field in availableFields.computed" :key="field" :value="field">
+                        {{ field }}
+                      </SelectItem>
+                    </div>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <!-- Operator Selection -->
+              <div>
+                <Label class="text-xs text-muted-foreground">Operator</Label>
+                <Select v-model="filter.operator" @update:modelValue="emitFilterUpdate">
+                  <SelectTrigger class="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="op in operators" :key="op.value" :value="op.value">
+                      {{ op.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <!-- Value Input -->
+              <div>
+                <Label class="text-xs text-muted-foreground">Value</Label>
+                <Input
+                  v-model="filter.value"
+                  @input="emitFilterUpdate"
+                  placeholder="Enter value"
+                  class="h-8 text-xs"
+                />
+              </div>
+              
+              <!-- Remove Button -->
+              <Button 
+                @click="removeGlobalFilter(filter.id)"
+                variant="outline" 
+                size="sm" 
+                class="w-full h-6 text-xs text-destructive hover:text-destructive"
+              >
+                <X class="w-3 h-3 mr-1" />
+                Remove Filter
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <!-- Used Fields Section -->
         <div v-if="usedFields.length > 0" class="space-y-2 pt-3 border-t">
           <Label class="text-xs text-muted-foreground">Used Fields in Report</Label>
@@ -444,7 +559,7 @@
 
           <!-- Other Widgets -->
           <div>
-            <Label class="text-xs text-muted-foreground mb-2 block">Other Widgets</Label>
+            <Label class="text-xs text-muted-foreground mb-2 block">Data Widgets</Label>
             <div class="grid grid-cols-2 gap-2">
               <Button @click="$emit('add-widget', 'stats')" variant="outline" size="sm">
                 <Activity class="w-4 h-4 mr-1" />
@@ -454,9 +569,40 @@
                 <Table2 class="w-4 h-4 mr-1" />
                 Table
               </Button>
+              <Button @click="$emit('add-widget', 'info')" variant="outline" size="sm">
+                <Info class="w-4 h-4 mr-1" />
+                Info
+              </Button>
+              <Button @click="$emit('add-widget', 'performance')" variant="outline" size="sm">
+                <Gauge class="w-4 h-4 mr-1" />
+                Performance
+              </Button>
+            </div>
+          </div>
+
+          <!-- Content Widgets -->
+          <div>
+            <Label class="text-xs text-muted-foreground mb-2 block">Content Widgets</Label>
+            <div class="grid grid-cols-2 gap-2">
               <Button @click="$emit('add-widget', 'heading')" variant="outline" size="sm">
                 <Heading class="w-4 h-4 mr-1" />
                 Heading
+              </Button>
+              <Button @click="$emit('add-widget', 'paragraph')" variant="outline" size="sm">
+                <Type class="w-4 h-4 mr-1" />
+                Paragraph
+              </Button>
+              <Button @click="$emit('add-widget', 'list')" variant="outline" size="sm">
+                <List class="w-4 h-4 mr-1" />
+                List
+              </Button>
+              <Button @click="$emit('add-widget', 'code')" variant="outline" size="sm">
+                <Code class="w-4 h-4 mr-1" />
+                Code
+              </Button>
+              <Button @click="$emit('add-widget', 'quote')" variant="outline" size="sm">
+                <Quote class="w-4 h-4 mr-1" />
+                Quote
               </Button>
               <Button @click="$emit('add-widget', 'divider')" variant="outline" size="sm">
                 <Minus class="w-4 h-4 mr-1" />
@@ -472,12 +618,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge, Save } from 'lucide-vue-next'
+import { GripVertical, ChevronDown, ChevronUp, Lock, Edit, BarChart3, Activity, Table2, Heading, Minus, X, Monitor, TrendingUp, PieChart, AreaChart as AreaChartIcon, LayoutGrid, GitBranch, Circle, BarChart2, TrendingDown, Grid3X3, GitMerge, Save, Info, Gauge, Type, List, Code, Quote } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 
 const props = defineProps({
   isEditMode: {
@@ -516,10 +663,18 @@ const props = defineProps({
   widgets: {
     type: Array,
     default: () => []
+  },
+  globalFilters: {
+    type: Object,
+    default: () => ({ fieldFilters: [] })
+  },
+  reportMetrics: {
+    type: Object,
+    default: () => ({ loadTime: 0, lastRefresh: null, apiCallCount: 0 })
   }
 })
 
-const emit = defineEmits(['toggle-mode', 'add-widget', 'update-widget-config', 'close-widget-config', 'close', 'toggle-display-mode', 'save-report'])
+const emit = defineEmits(['toggle-mode', 'add-widget', 'update-widget-config', 'close-widget-config', 'close', 'toggle-display-mode', 'save-report', 'update-global-filters'])
 
 const toolbarRef = ref(null)
 const isCollapsed = ref(false)
@@ -527,6 +682,26 @@ const isDragging = ref(false)
 const position = ref({ x: 20, y: 100 }) // Default position
 const dragOffset = ref({ x: 0, y: 0 })
 const localConfig = ref({})
+const localFilters = ref({ fieldFilters: [] })
+
+// Available operators for field filtering
+const operators = [
+  { value: 'equals', label: 'Equals (=)' },
+  { value: 'not_equals', label: 'Not Equals (≠)' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'startswith', label: 'Starts with' },
+  { value: 'endswith', label: 'Ends with' },
+  { value: 'gt', label: 'Greater than (>)' },
+  { value: 'gte', label: 'Greater or equal (≥)' },
+  { value: 'lt', label: 'Less than (<)' },
+  { value: 'lte', label: 'Less or equal (≤)' }
+]
+
+// Connector options
+const connectors = [
+  { value: 'AND', label: 'AND' },
+  { value: 'OR', label: 'OR' }
+]
 
 // Available fields from metadata
 const availableFields = computed(() => {
@@ -619,6 +794,13 @@ watch(() => props.selectedWidget, (newWidget) => {
   }
 }, { immediate: true, deep: true })
 
+// Watch for globalFilters changes
+watch(() => props.globalFilters, (newFilters) => {
+  if (newFilters) {
+    localFilters.value = { ...newFilters }
+  }
+}, { immediate: true, deep: true })
+
 const toolbarStyle = computed(() => {
   if (props.mode === 'sidebar') {
     return {
@@ -661,6 +843,36 @@ const emitConfigUpdate = () => {
 const closeWidgetConfig = () => {
   emit('close-widget-config')
 }
+
+// Global filter methods
+const addGlobalFilter = () => {
+  localFilters.value.fieldFilters.push({
+    field: '',
+    operator: 'equals',
+    value: '',
+    connector: 'AND',
+    id: Date.now()
+  })
+}
+
+const removeGlobalFilter = (filterId) => {
+  localFilters.value.fieldFilters = localFilters.value.fieldFilters.filter(f => f.id !== filterId)
+  emitFilterUpdate()
+}
+
+const clearAllFilters = () => {
+  localFilters.value = { fieldFilters: [] }
+  emitFilterUpdate()
+}
+
+const emitFilterUpdate = () => {
+  emit('update-global-filters', { ...localFilters.value })
+}
+
+// Computed for active filter count
+const activeFilterCount = computed(() => {
+  return localFilters.value.fieldFilters.filter(f => f.field && f.value).length
+})
 
 const startDrag = (e) => {
   // Only drag if clicking on the header area

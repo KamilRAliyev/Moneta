@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel
 import logging
+import re
 
 from server.models.main import Report, Transaction
 from server.services.database import get_db
@@ -249,6 +250,7 @@ async def delete_report(
 # Data Aggregation Endpoint
 @router.get("/data/aggregated/")
 async def get_aggregated_data(
+    request: Request,
     x_field: str = Query(..., description="Field to group by (x-axis)"),
     y_field: str = Query(..., description="Field to aggregate (y-axis)"),
     aggregation: str = Query("sum", description="Aggregation method: sum, avg, count"),
@@ -277,6 +279,22 @@ async def get_aggregated_data(
     try:
         import json
         from collections import defaultdict
+        
+        # Parse field filters from query parameters
+        query_params = dict(request.query_params)
+        filter_params = {}
+        for key, value in query_params.items():
+            if key.startswith('filter_') and '_' in key[7:]:
+                parts = key.split('_')
+                if len(parts) >= 3:
+                    filter_index = parts[1]
+                    filter_type = parts[2]
+                    
+                    if filter_index not in filter_params:
+                        filter_params[filter_index] = {}
+                    filter_params[filter_index][filter_type] = value
+        
+        logger.info(f"Field filters received: {filter_params}")
         
         # Build base query
         query = db.query(Transaction)
@@ -345,6 +363,82 @@ async def get_aggregated_data(
                     # Skip transactions without a date field when filtering by date
                     if date_from or date_to:
                         continue
+            
+            # Apply field filters
+            if filter_params:
+                skip_transaction = False
+                for filter_index, filter_data in filter_params.items():
+                    if 'field' in filter_data and 'operator' in filter_data and 'value' in filter_data:
+                        field = filter_data['field']
+                        operator = filter_data['operator']
+                        filter_value = filter_data['value']
+                        connector = filter_data.get('connector', 'AND')
+                        
+                        if not field or not filter_value:
+                            continue
+                        
+                        # Get field value from content
+                        field_value = content.get(field)
+                        if field_value is None:
+                            # Try case-insensitive search
+                            for key, val in content.items():
+                                if key.lower() == field.lower():
+                                    field_value = val
+                                    break
+                        
+                        # Skip if field not found
+                        if field_value is None:
+                            skip_transaction = True
+                            break
+                        
+                        # Convert to string for comparison
+                        field_value_str = str(field_value)
+                        filter_value_str = str(filter_value)
+                        
+                        # Try numeric comparison
+                        try:
+                            field_value_num = float(field_value)
+                            filter_value_num = float(filter_value)
+                            is_numeric = True
+                        except (ValueError, TypeError):
+                            is_numeric = False
+                        
+                        # Apply operator
+                        match = False
+                        if operator == 'equals':
+                            if is_numeric:
+                                match = field_value_num == filter_value_num
+                            else:
+                                match = field_value_str.lower() == filter_value_str.lower()
+                        elif operator == 'contains':
+                            match = filter_value_str.lower() in field_value_str.lower()
+                        elif operator == 'startswith':
+                            match = field_value_str.lower().startswith(filter_value_str.lower())
+                        elif operator == 'endswith':
+                            match = field_value_str.lower().endswith(filter_value_str.lower())
+                        elif operator == 'not_equals':
+                            if is_numeric:
+                                match = field_value_num != filter_value_num
+                            else:
+                                match = field_value_str.lower() != filter_value_str.lower()
+                        elif operator == 'gt' and is_numeric:
+                            match = field_value_num > filter_value_num
+                        elif operator == 'gte' and is_numeric:
+                            match = field_value_num >= filter_value_num
+                        elif operator == 'lt' and is_numeric:
+                            match = field_value_num < filter_value_num
+                        elif operator == 'lte' and is_numeric:
+                            match = field_value_num <= filter_value_num
+                        
+                        # For AND logic, if any filter fails, skip the transaction
+                        # For OR logic, this is more complex and needs proper implementation
+                        # For now, implement AND logic (all filters must pass)
+                        if not match:
+                            skip_transaction = True
+                            break
+                
+                if skip_transaction:
+                    continue
             
             # Extract x-axis value
             x_value = None

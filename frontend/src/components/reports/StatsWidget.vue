@@ -67,6 +67,10 @@ const props = defineProps({
     type: Object,
     default: () => ({ from: null, to: null })
   },
+  globalFilters: {
+    type: Object,
+    default: () => ({ fieldFilters: [] })
+  },
   metadata: {
     type: Object,
     default: () => ({ ingested_columns: {}, computed_columns: {} })
@@ -199,6 +203,18 @@ const fetchData = async () => {
       params.split_by_currency = false // Stats widget shows total, not split
     }
     
+    // Add global field filters if provided
+    if (props.globalFilters && props.globalFilters.fieldFilters && props.globalFilters.fieldFilters.length > 0) {
+      props.globalFilters.fieldFilters.forEach((filter, index) => {
+        if (filter.field && filter.value) {
+          params[`filter_${index}_field`] = filter.field
+          params[`filter_${index}_operator`] = filter.operator || 'equals'
+          params[`filter_${index}_value`] = filter.value
+          params[`filter_${index}_connector`] = filter.connector || 'AND'
+        }
+      })
+    }
+    
     const response = await reportsApi.getAggregatedData(params)
     
     // Calculate total from all categories
@@ -230,6 +246,15 @@ watch(() => props.config, (newConfig) => {
   console.log('📋 StatsWidget: Config changed, updating localConfig')
   Object.assign(localConfig, newConfig)
 }, { deep: true })
+
+// Watch for global filter changes
+watch(() => props.globalFilters, 
+  (newFilters) => {
+    console.log('StatsWidget: Global filters changed!', newFilters)
+    fetchData()
+  },
+  { deep: true }
+)
 
 // Watch for date range changes - watch all properties including dateField
 watch(() => [props.dateRange?.from, props.dateRange?.to, props.dateRange?.dateField], 

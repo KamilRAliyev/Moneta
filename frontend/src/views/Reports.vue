@@ -88,6 +88,11 @@
               <span class="font-mono">{{ resourceUsage.widgetCount }} widgets</span>
               <span class="mx-2">•</span>
               <span class="font-mono">{{ resourceUsage.memory }}MB</span>
+              <RefreshCw 
+                @click="refreshMemory" 
+                class="w-3 h-3 ml-1.5 cursor-pointer hover:text-foreground transition-colors" 
+                title="Refresh memory usage"
+              />
             </div>
 
             <!-- Delete Report -->
@@ -123,6 +128,8 @@
         :selected-widget="selectedWidget"
         :metadata="metadata"
         :widgets="layout"
+        :global-filters="globalFilters"
+        :report-metrics="reportMetrics"
         @toggle-mode="toggleMode"
         @add-widget="addWidget"
         @update-widget-config="updateWidgetConfigFromToolbar"
@@ -130,6 +137,7 @@
         @close="closeSidebar"
         @toggle-display-mode="toggleDisplayMode"
         @save-report="handleManualSave"
+        @update-global-filters="updateGlobalFilters"
       />
       
       <!-- Loading State -->
@@ -182,6 +190,7 @@
                   :config="item.config"
                   :is-edit-mode="isEditMode"
                   :date-range="dateRange"
+                  :global-filters="globalFilters"
                   :metadata="metadata"
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
@@ -195,6 +204,7 @@
                   :config="item.config"
                   :is-edit-mode="isEditMode"
                   :date-range="dateRange"
+                  :global-filters="globalFilters"
                   :metadata="metadata"
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
@@ -229,6 +239,61 @@
                   @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
                   @remove="() => removeWidget(item.i)"
                 />
+                
+                <!-- Info Widget -->
+                <InfoWidget
+                  v-else-if="item.type === 'info'"
+                  :is-edit-mode="isEditMode"
+                  :report-metrics="reportMetrics"
+                  :widget-count="layout.length"
+                  :date-range="dateRange"
+                  :transaction-count="transactionCount"
+                  :metadata="metadata"
+                  @remove="() => removeWidget(item.i)"
+                />
+                
+                <!-- Performance Widget -->
+                <PerformanceWidget
+                  v-else-if="item.type === 'performance'"
+                  :is-edit-mode="isEditMode"
+                  @remove="() => removeWidget(item.i)"
+                />
+                
+                <!-- Paragraph Widget -->
+                <ParagraphWidget
+                  v-else-if="item.type === 'paragraph'"
+                  :config="item.config"
+                  :is-edit-mode="isEditMode"
+                  @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
+                  @remove="() => removeWidget(item.i)"
+                />
+                
+                <!-- List Widget -->
+                <ListWidget
+                  v-else-if="item.type === 'list'"
+                  :config="item.config"
+                  :is-edit-mode="isEditMode"
+                  @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
+                  @remove="() => removeWidget(item.i)"
+                />
+                
+                <!-- Code Widget -->
+                <CodeWidget
+                  v-else-if="item.type === 'code'"
+                  :config="item.config"
+                  :is-edit-mode="isEditMode"
+                  @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
+                  @remove="() => removeWidget(item.i)"
+                />
+                
+                <!-- Quote Widget -->
+                <QuoteWidget
+                  v-else-if="item.type === 'quote'"
+                  :config="item.config"
+                  :is-edit-mode="isEditMode"
+                  @config-updated="(newConfig) => updateWidgetConfig(item.i, newConfig)"
+                  @remove="() => removeWidget(item.i)"
+                />
               </CardContent>
             </Card>
           </GridItem>
@@ -250,6 +315,12 @@ import StatsWidget from '@/components/reports/StatsWidget.vue'
 import DateRangePicker from '@/components/reports/DateRangePicker.vue'
 import FloatingToolbar from '@/components/reports/FloatingToolbar.vue'
 import TableWidget from '@/components/reports/TableWidget.vue'
+import InfoWidget from '@/components/reports/InfoWidget.vue'
+import PerformanceWidget from '@/components/reports/PerformanceWidget.vue'
+import ParagraphWidget from '@/components/reports/ParagraphWidget.vue'
+import ListWidget from '@/components/reports/ListWidget.vue'
+import CodeWidget from '@/components/reports/CodeWidget.vue'
+import QuoteWidget from '@/components/reports/QuoteWidget.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -257,6 +328,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useDebounceFn } from '@vueuse/core'
 import { useReportsPersistence } from '@/composables/useReportsPersistence'
 import { useAlert } from '@/composables/useAlert'
+import { useReportMetrics } from '@/composables/useReportMetrics'
 
 // State
 const reports = ref([])
@@ -268,10 +340,20 @@ const loading = ref(false)
 const saving = ref(false)
 const refreshing = ref(false)
 const dateRange = ref({ from: null, to: null, dateField: 'date' })
+const globalFilters = ref({ fieldFilters: [] })
 const metadata = ref({ ingested_columns: {}, computed_columns: {} })
+const transactionCount = ref(null)
 const widgetRefreshKey = ref(0)
 const sidebarOpen = ref(false)
 const selectedWidget = ref(null)
+
+// Report metrics tracking
+const metricsTracker = useReportMetrics()
+const reportMetrics = computed(() => ({
+  loadTime: metricsTracker.reportLoadTime.value,
+  lastRefresh: metricsTracker.lastRefresh.value,
+  apiCallCount: metricsTracker.apiCallCount.value
+}))
 
 // Persistence
 const persistence = useReportsPersistence()
@@ -279,40 +361,22 @@ const persistence = useReportsPersistence()
 // Alerts
 const alert = useAlert()
 
-// Resource monitoring
+// Resource monitoring - using REAL Chrome performance data
+const currentMemory = ref('0.0')
 const resourceUsage = computed(() => {
-  const widgetCount = layout.value.length
-  const baseMemory = 5 // Base report overhead in MB
-  
-  // Calculate memory based on widget types
-  let widgetMemory = 0
-  layout.value.forEach(item => {
-    switch (item.type) {
-      case 'chart':
-        widgetMemory += 4 // Chart widgets: ~4MB
-        break
-      case 'table':
-        widgetMemory += 8 // Table widgets: ~8MB
-        break
-      case 'stats':
-        widgetMemory += 1 // Stats widgets: ~1MB
-        break
-      case 'heading':
-      case 'divider':
-        widgetMemory += 0.5 // Simple widgets: ~0.5MB
-        break
-      default:
-        widgetMemory += 2
-    }
-  })
-  
-  const memory = (baseMemory + widgetMemory).toFixed(1)
-  
   return {
-    widgetCount,
-    memory
+    widgetCount: layout.value.length,
+    memory: currentMemory.value
   }
 })
+
+// Refresh memory - expensive operation, only on demand
+const refreshMemory = () => {
+  if (performance.memory) {
+    const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024)
+    currentMemory.value = usedMB.toFixed(1)
+  }
+}
 
 // Computed
 const nextWidgetId = computed(() => {
@@ -350,11 +414,13 @@ const loadReport = async () => {
   if (!selectedReportId.value) {
     currentReport.value = null
     layout.value = []
+    metricsTracker.resetMetrics()
     return
   }
   
   try {
     loading.value = true
+    metricsTracker.startLoadTracking()
     const response = await reportsApi.getReport(selectedReportId.value)
     
     // IMPORTANT: Restore date filters BEFORE setting currentReport
@@ -366,6 +432,15 @@ const loadReport = async () => {
       // Reset to default if no filters saved
       console.log('📅 No saved filters, using defaults')
       dateRange.value = { from: null, to: null, dateField: 'date' }
+    }
+    
+    // Restore global filters
+    if (response.data.filters && response.data.filters.globalFilters) {
+      console.log('🔍 Restoring saved global filters:', response.data.filters.globalFilters)
+      globalFilters.value = { ...response.data.filters.globalFilters }
+    } else {
+      console.log('🔍 No saved global filters, using defaults')
+      globalFilters.value = { fieldFilters: [] }
     }
     
     // Save as last viewed
@@ -385,6 +460,16 @@ const loadReport = async () => {
     // Set currentReport AFTER updating filters
     // This triggers v-if="currentReport" and creates DateRangePicker with correct values
     currentReport.value = response.data
+    
+    // Wait for next tick to ensure all widgets have mounted, then end tracking
+    await nextTick()
+    metricsTracker.endLoadTracking()
+    
+    // Refresh memory once after report is fully loaded (expensive operation)
+    refreshMemory()
+    
+    // Load transaction count
+    await loadTransactionCount()
   } catch (error) {
     console.error('Failed to load report:', error)
     alert.error('Failed to load report.')
@@ -402,7 +487,8 @@ const createNewReport = async () => {
       name,
       widgets: [],
       filters: {
-        dateRange: dateRange.value
+        dateRange: dateRange.value,
+        globalFilters: globalFilters.value
       }
     })
     
@@ -436,9 +522,10 @@ const saveReport = async () => {
       config: item.config
     }))
     
-    // Include filters with dateRange
+    // Include filters with dateRange and globalFilters
     const filters = {
-      dateRange: dateRange.value
+      dateRange: dateRange.value,
+      globalFilters: globalFilters.value
     }
     
     await reportsApi.updateReport(currentReport.value.id, {
@@ -512,7 +599,13 @@ const addWidget = (type, chartType = null) => {
     stats: 3,
     table: 12,
     heading: 12,
-    divider: 12
+    divider: 12,
+    info: 4,
+    performance: 4,
+    paragraph: 6,
+    list: 4,
+    code: 6,
+    quote: 6
   }
   
   const heightMap = {
@@ -520,7 +613,13 @@ const addWidget = (type, chartType = null) => {
     stats: 3,
     table: 6,
     heading: 2,
-    divider: 1
+    divider: 1,
+    info: 4,
+    performance: 5,
+    paragraph: 3,
+    list: 4,
+    code: 4,
+    quote: 3
   }
   
   const newWidget = {
@@ -646,6 +745,31 @@ const getDefaultConfig = (type, chartType = null) => {
     return {
       thickness: 'thin'
     }
+  } else if (type === 'info') {
+    return {}
+  } else if (type === 'performance') {
+    return {}
+  } else if (type === 'paragraph') {
+    return {
+      text: 'Enter your text here...',
+      fontSize: 'base',
+      align: 'left'
+    }
+  } else if (type === 'list') {
+    return {
+      listType: 'bullet',
+      items: ['Item 1', 'Item 2', 'Item 3']
+    }
+  } else if (type === 'code') {
+    return {
+      code: '// Enter your code here...',
+      language: 'javascript'
+    }
+  } else if (type === 'quote') {
+    return {
+      quote: 'Enter your quote here...',
+      author: ''
+    }
   }
   return {}
 }
@@ -676,12 +800,43 @@ const updateDateRange = async (newRange) => {
   // Now trigger refresh - widgets will get the updated dateRange
   widgetRefreshKey.value++
   
+  // Reload transaction count with new date range
+  await loadTransactionCount()
+  
   console.log('=== END DATE RANGE UPDATE ===')
+}
+
+const updateGlobalFilters = async (newFilters) => {
+  console.log('=== GLOBAL FILTERS UPDATE ===')
+  console.log('Old filters:', globalFilters.value)
+  console.log('New filters:', newFilters)
+  
+  // Update the ref with a completely new object to trigger reactivity
+  globalFilters.value = { ...newFilters }
+  
+  console.log('Updated filters:', globalFilters.value)
+  
+  // Wait for Vue to finish updating the DOM
+  await nextTick()
+  await nextTick()
+  
+  console.log('Auto-refreshing widgets with filters...')
+  
+  // Trigger refresh - widgets will get the updated globalFilters
+  widgetRefreshKey.value++
+  
+  // Reload transaction count with new filters
+  await loadTransactionCount()
+  
+  console.log('=== END GLOBAL FILTERS UPDATE ===')
 }
 
 const refreshAllWidgets = async () => {
   refreshing.value = true
   console.log('Manually refreshing all widgets with date range:', dateRange.value)
+  
+  // Update last refresh timestamp
+  metricsTracker.updateLastRefresh()
   
   // Force re-render all widgets by incrementing the key
   widgetRefreshKey.value++
@@ -689,6 +844,9 @@ const refreshAllWidgets = async () => {
   // Wait a bit for the refresh to complete
   await new Promise(resolve => setTimeout(resolve, 500))
   refreshing.value = false
+  
+  // Reload transaction count
+  await loadTransactionCount()
 }
 
 const loadMetadata = async () => {
@@ -697,6 +855,63 @@ const loadMetadata = async () => {
     metadata.value = response.data
   } catch (error) {
     console.error('Failed to load metadata:', error)
+  }
+}
+
+const loadTransactionCount = async () => {
+  try {
+    console.log('🔢 Loading transaction count with filters:', {
+      dateRange: dateRange.value,
+      globalFilters: globalFilters.value
+    })
+    
+    // Fetch transaction count from API with current filters
+    const params = {}
+    if (dateRange.value.from) params.date_from = dateRange.value.from
+    if (dateRange.value.to) params.date_to = dateRange.value.to
+    if (dateRange.value.dateField) params.date_field = dateRange.value.dateField
+    
+    // Add global filters if any
+    if (globalFilters.value?.fieldFilters && globalFilters.value.fieldFilters.length > 0) {
+      globalFilters.value.fieldFilters.forEach((filter, index) => {
+        // Check for field and that value is not null/undefined (0 is a valid value!)
+        if (filter.field && filter.value !== null && filter.value !== undefined) {
+          params[`filter_${index}_field`] = filter.field
+          params[`filter_${index}_operator`] = filter.operator || 'equals'
+          params[`filter_${index}_value`] = filter.value
+          params[`filter_${index}_connector`] = filter.connector || 'AND'
+        }
+      })
+    }
+    
+    console.log('🔢 Transaction count API params:', JSON.stringify(params))
+    
+    // Use a common field to group by and then sum all counts
+    // Using 'merchant' as it exists in most transactions
+    const response = await reportsApi.getAggregatedData({
+      ...params,
+      x_field: 'merchant',
+      y_field: 'merchant',
+      aggregation: 'count'
+    })
+    
+    console.log('🔢 Transaction count response:', response.data)
+    
+    // The response includes a filtered_records count - use that if available
+    if (response.data && typeof response.data.filtered_records === 'number') {
+      transactionCount.value = response.data.filtered_records
+      console.log('🔢 Using filtered_records count:', transactionCount.value)
+    } else if (response.data && response.data.values && Array.isArray(response.data.values)) {
+      // Fallback: Sum all the counts from each group
+      transactionCount.value = response.data.values.reduce((sum, count) => sum + count, 0)
+      console.log('🔢 Summed from values:', transactionCount.value)
+    } else {
+      console.warn('🔢 Unexpected response format:', response.data)
+      transactionCount.value = 0
+    }
+  } catch (error) {
+    console.error('Failed to load transaction count:', error)
+    transactionCount.value = 0
   }
 }
 
